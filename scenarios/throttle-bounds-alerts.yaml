@@ -55,7 +55,10 @@ expect:
       - { event: ingest_response, status: 429 }
 
     order:
-      - before: { event: ingest_response, status: 202 }
+      # The rule is registered before it can fire. The first 202 is not used
+      # as the `before`, because the reply and the first alert can land in
+      # either order within a millisecond of each other.
+      - before: { event: rule_response, kind: put, id: listener-flap }
         after:  { event: ntfy_post, service: ntfy.listen.connected }
 
     count:
