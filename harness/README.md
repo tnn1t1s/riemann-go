@@ -36,8 +36,16 @@ python3 -m venv .venv
   --scenario scenarios/expiry-becomes-event.yaml \
   --binary bin/riemannd \
   --report-out reports/expiry-becomes-event.json \
-  --trace-out  traces/expiry-becomes-event.jsonl
+  --trace-out  traces/expiry-becomes-event.jsonl \
+  --log-out    logs/expiry-becomes-event.log
 ```
+
+`--log-out` gets riemannd's whole log, not the report's 40-line tail, because
+the diagnostician reads it. The file is written even when empty, so an absent
+one means the run did not get that far rather than that riemannd was quiet.
+`score.category` in the report is one of `compile_error`, `start_error`,
+`ingest_error`, `rule_error`, `sink_error`, `observer_error`,
+`predicate_violation` or `GREEN`.
 
 Exit status is 0 when the score is 1.0 and 1 otherwise. The harness picks
 ephemeral ports for both riemannd and the sink receiver, so runs do not collide,
