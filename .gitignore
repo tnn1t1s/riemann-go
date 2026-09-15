@@ -1,3 +1,7 @@
 probes/*/probe[0-9]
 probes/**/__pycache__/
 probes/**/*.log
+.venv/
+reports/
+traces/
+harness/**/__pycache__/
