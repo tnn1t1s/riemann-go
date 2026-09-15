@@ -192,6 +192,7 @@ def run(args) -> Dict[str, Any]:
         influx_url=receiver.influx_url,
         log_path=log_path,
         state_dir=state_dir,
+        config=scenario.get("config") or {},
     )
 
     wall_start = time.time()

@@ -1,0 +1,64 @@
+name: rule-lifecycle
+description: >
+  A rule is a resource. PUT it and it fires; DELETE it and it stops firing.
+  SCOPE.md "Rules", Lifecycle. The delete half is the half that matters: a
+  rule registry that never removes an instance passes every other scenario in
+  this corpus.
+
+  No rules are seeded at the top level here, because the PUT is the property.
+
+settle_seconds: 5
+
+stimulus:
+  - at: 0s
+    put_rule:
+      id: listener-connected
+      rule:
+        id: listener-connected
+        owner: ops
+        partition: host
+        match: 'service == "ntfy.listen.connected"'
+        stream:
+          op: changed-state
+          initial: ok
+          children:
+            - { sink: ntfy }
+
+  # Fires while the rule is registered.
+  - at: 1s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: warning, metric: 1, ttl: 300 }]
+
+  - at: 3s
+    delete_rule: listener-connected
+
+  # A transition that would alert if the rule were still registered. The
+  # distinct state is what makes the silence provable rather than assumed.
+  - at: 4s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: critical, metric: 0, ttl: 300 }]
+
+expect:
+  trace:
+    contains:
+      - { event: rule_response, kind: put, id: listener-connected, status: 200 }
+      - { event: rule_response, kind: delete, id: listener-connected, status: 200 }
+      - { event: ntfy_post, service: ntfy.listen.connected, state: warning }
+
+    not_contains:
+      # The post-delete transition. Its absence is the delete half.
+      - { event: ntfy_post, service: ntfy.listen.connected, state: critical }
+
+    order:
+      - before: { event: rule_response, kind: put, id: listener-connected }
+        after:  { event: ntfy_post, service: ntfy.listen.connected }
+      - before: { event: ntfy_post, service: ntfy.listen.connected }
+        after:  { event: rule_response, kind: delete, id: listener-connected }
+
+    count:
+      - match: { event: ntfy_post, service: ntfy.listen.connected }
+        equals: 1
+
+    field_exists:
+      - match: { event: rule_response, kind: put, id: listener-connected }
+        field: version

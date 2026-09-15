@@ -1,0 +1,48 @@
+name: ingest-accepted
+description: >
+  One event posted to /events is admitted and reaches the InfluxDB sink
+  carrying its own identity. Asserts the ingest contract of SCOPE.md "Wire and
+  backpressure" (202 with an accepted count) and the sink contract of
+  SCOPE.md "Sinks". This is the scenario that fails first if nothing works.
+
+settle_seconds: 5
+
+rules:
+  - id: archive-all
+    owner: arena
+    partition: host
+    match: "true"
+    stream: { sink: influx }
+
+stimulus:
+  - at: 0s
+    emit:
+      events:
+        - host: ghost
+          service: agent.tokens.out
+          state: ok
+          metric: 1234
+          ttl: 300
+          tags: [agent-obs]
+
+expect:
+  trace:
+    contains:
+      - { event: ingest_response, status: 202, accepted: 1 }
+      - { event: influx_write, host: ghost, service: agent.tokens.out, metric: 1234.0 }
+
+    not_contains:
+      - { event: ingest_response, status: 429 }
+      - { event: ingest_response, status: 400 }
+
+    order:
+      - before: { event: ingest_response, status: 202 }
+        after:  { event: influx_write, host: ghost }
+
+    count:
+      - match: { event: influx_write, service: agent.tokens.out }
+        min: 1
+
+    field_exists:
+      - match: { event: influx_write, service: agent.tokens.out }
+        field: bucket

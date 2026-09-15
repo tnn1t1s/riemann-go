@@ -29,6 +29,7 @@ class Adapter:
         influx_url: str,
         log_path: str,
         state_dir: str,
+        config: Optional[Dict[str, Any]] = None,
     ):
         self.binary = binary
         self.listen_addr = listen_addr
@@ -37,6 +38,11 @@ class Adapter:
         self.influx_url = influx_url
         self.log_path = log_path
         self.state_dir = state_dir
+        # A scenario's `config:` block, passed through as `--set key=value`.
+        # These are SCOPE.md's own parameter names. The adapter does not know
+        # what any of them mean and must not learn: it renders key and value
+        # as text and hands them over.
+        self.config = dict(config or {})
         self._proc: Optional[subprocess.Popen] = None
         self._log_file = None
 
@@ -45,7 +51,7 @@ class Adapter:
     def start_command(self) -> List[str]:
         # Every URL, port and token appears here and only here, which is what
         # SCOPE.md "Package layout" requires of cmd/riemannd.
-        return [
+        argv = [
             self.binary,
             "serve",
             "--listen", self.listen_addr,
@@ -57,6 +63,9 @@ class Adapter:
             "--influx-bucket", "arena",
             "--influx-token", "arena-token",
         ]
+        for key, value in self.config.items():
+            argv += ["--set", f"{key}={value}"]
+        return argv
 
     def start(self) -> subprocess.Popen:
         self._log_file = open(self.log_path, "a+")
