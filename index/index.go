@@ -33,11 +33,11 @@ type heapItem struct {
 
 type expiryHeap []heapItem
 
-func (h expiryHeap) Len() int            { return len(h) }
-func (h expiryHeap) Less(i, j int) bool  { return h[i].at < h[j].at }
-func (h expiryHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *expiryHeap) Push(x any)         { *h = append(*h, x.(heapItem)) }
-func (h *expiryHeap) Pop() any           { o := *h; n := len(o); it := o[n-1]; *h = o[:n-1]; return it }
+func (h expiryHeap) Len() int           { return len(h) }
+func (h expiryHeap) Less(i, j int) bool { return h[i].at < h[j].at }
+func (h expiryHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *expiryHeap) Push(x any)        { *h = append(*h, x.(heapItem)) }
+func (h *expiryHeap) Pop() any          { o := *h; n := len(o); it := o[n-1]; *h = o[:n-1]; return it }
 
 // Index is one shard's slice.
 type Index struct {
