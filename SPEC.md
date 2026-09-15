@@ -267,7 +267,7 @@ Harness-emitted events, used only where the sink cannot see the property:
 | `query_response` | `kind`, plus the fields that query kind returns |
 | `rule_response` | `kind`, `id`, `status`, `version` |
 
-The extracted fields on `ntfy_post` are exactly the JSON object embedded in `message`, plus the ntfy envelope. That is what makes `## Alert shape` load-bearing rather than cosmetic: the harness parses provenance out of the place this spec pins it, and nowhere else.
+The extracted fields on `ntfy_post` are exactly the JSON object embedded in `message`, plus the ntfy envelope. The harness parses provenance out of the place this spec pins it, and nowhere else, so `## Alert shape` is a contract rather than a suggestion.
 
 riemann-go's own counters reach the trace only through `GET /metrics` as a `query_response`. Its logs are debugging artifacts and no scenario reads them.
 
