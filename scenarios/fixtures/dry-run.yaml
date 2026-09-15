@@ -1,0 +1,40 @@
+name: dry-run-self-test
+description: >
+  Asserts over the recorded fixture in dry-run.json. Not a property of
+  riemann-go: a property of the harness. It exercises every one of the five
+  operators against a trace built by the real sink receiver, so a change that
+  breaks the receiver, the line-protocol parser, the provenance extraction or
+  the sequencing fails here before it reaches a scenario.
+
+expect:
+  trace:
+    contains:
+      - { event: influx_write, host: ghost, service: agent.tokens.out, metric: 1234.0 }
+      - { event: ntfy_post, service: agent.cost, state: warning, rule: atlas-cost }
+      - { event: ntfy_post, service: ntfy.listen.up, state: expired }
+      - { event: ingest_response, status: 202, accepted: 2 }
+
+    not_contains:
+      - { event: ingest_response, status: 429 }
+      - { event: ntfy_post, state: critical }
+
+    order:
+      - before: { event: influx_write, service: agent.cost }
+        after:  { event: ntfy_post, service: agent.cost }
+
+    count:
+      - match: { event: ntfy_post }
+        equals: 2
+      - match: { event: influx_write }
+        min: 2
+        max: 2
+
+    field_exists:
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: prior_state
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: rule_version
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: node_path
+      - match: { event: influx_write }
+        field: bucket
