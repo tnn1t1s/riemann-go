@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Run the diagnostician on a failing scenario run.
+#
+# Usage:
+#   bin/diagnose <scenario.yaml> <report.json> [<trace.jsonl>] [<riemannd.log>]
+#   bin/diagnose --help
+#
+# Invokes claude -p with the diagnostician prompt and read-only file access.
+# The diagnostician runs in its own context and does NOT read the generated
+# source: it reasons from the spec and from what the harness's sink receiver
+# observed. Writes the diagnosis to reports/diagnosis-<scenario>-<timestamp>.md
+# and prints it to stdout.
+
+set -euo pipefail
+
+usage() {
+  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  usage
+  exit 0
+fi
+
+if [ $# -lt 2 ]; then
+  usage >&2
+  exit 2
+fi
+
+SCENARIO=$1
+REPORT=$2
+TRACE=${3:-}
+LOG=${4:-}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Absolutize without requiring the path to exist, so a missing input is reported
+# by name below rather than as a cd failure here.
+abspath() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *)  printf '%s/%s\n' "$PWD" "$1" ;;
+  esac
+}
+
+SCENARIO_ABS="$(abspath "$SCENARIO")"
+REPORT_ABS="$(abspath "$REPORT")"
+
+# Default trace and log locations follow the report's basename, which is the
+# convention bin/iterate writes: reports/foo.json -> traces/foo.jsonl and
+# reports/foo.log. Both are derived, never substituted from something nearby.
+base="$(basename "$REPORT" .json)"
+[ -n "$TRACE" ] || TRACE="$REPO_DIR/traces/$base.jsonl"
+[ -n "$LOG" ]   || LOG="$REPO_DIR/reports/$base.log"
+
+TRACE_ABS="$(abspath "$TRACE")"
+LOG_ABS="$(abspath "$LOG")"
+
+missing=0
+for f in "$REPO_DIR/SPEC.md" "$REPO_DIR/HARNESS.md" "$SCENARIO_ABS" "$REPORT_ABS" "$TRACE_ABS" "$LOG_ABS"; do
+  if [ ! -f "$f" ]; then
+    echo "bin/diagnose: missing input: $f" >&2
+    missing=1
+  fi
+done
+if [ "$missing" -ne 0 ]; then
+  echo "bin/diagnose: a diagnosis without the trace or the log is speculation; refusing." >&2
+  exit 2
+fi
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "bin/diagnose: 'claude' not on PATH; the diagnostician cannot run." >&2
+  exit 2
+fi
+
+PROMPT=$(sed \
+  -e "s|__SPEC_PATH__|$REPO_DIR/SPEC.md|g" \
+  -e "s|__HARNESS_PATH__|$REPO_DIR/HARNESS.md|g" \
+  -e "s|__SCENARIO_PATH__|$SCENARIO_ABS|g" \
+  -e "s|__TRACE_PATH__|$TRACE_ABS|g" \
+  -e "s|__REPORT_PATH__|$REPORT_ABS|g" \
+  -e "s|__LOG_PATH__|$LOG_ABS|g" \
+  "$REPO_DIR/bin/diagnose-prompt.md")
+
+mkdir -p "$REPO_DIR/reports"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+SCENARIO_NAME=$(basename "$SCENARIO" .yaml)
+OUT_FILE="$REPO_DIR/reports/diagnosis-${SCENARIO_NAME}-${TIMESTAMP}.md"
+
+echo "diagnosing $SCENARIO_NAME ..." >&2
+
+claude -p "$PROMPT" \
+  --allowedTools "Read" \
+  --max-turns 15 \
+  > "$OUT_FILE"
+
+echo "diagnosis written to: $OUT_FILE" >&2
+echo
+cat "$OUT_FILE"
