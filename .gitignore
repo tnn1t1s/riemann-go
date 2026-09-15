@@ -10,3 +10,15 @@ scratch/*
 # Built binaries. The binary belonging to a release is committed inside that
 # release directory; nothing else is.
 riemannd
+
+# Working reports and traces. These are read constantly during a loop and are
+# worthless a week later. The evidence that outlives a run is copied into
+# releases/<gen-id>/ when a candidate lands, or into failures/promoted/ when a
+# failure becomes a scenario.
+reports/*
+!reports/.gitkeep
+traces/*
+!traces/.gitkeep
+
+.venv/
+harness/**/__pycache__/

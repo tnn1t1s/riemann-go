@@ -1,0 +1,64 @@
+name: changed-state-transitions-only
+description: >
+  changed-state forwards an event only when its state differs from the state
+  it last saw for that key. Five events in the same state produce nothing; the
+  sixth, in a different state, produces exactly one alert. Ported from
+  riemann/test/riemann/streams_test.clj changed-state-test, and the property
+  the fleet's ntfy.listen.up rule depends on today.
+
+settle_seconds: 6
+
+rules:
+  - id: listener-connected
+    owner: ops
+    partition: host
+    match: 'service == "ntfy.listen.connected"'
+    stream:
+      op: changed-state
+      initial: ok
+      children:
+        - { sink: ntfy }
+
+stimulus:
+  # Five in state ok. changed-state's initial value is ok, so none is a
+  # transition and none may alert.
+  - at: 0.0s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: ok, metric: 1, ttl: 300 }]
+  - at: 0.4s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: ok, metric: 1, ttl: 300 }]
+  - at: 0.8s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: ok, metric: 1, ttl: 300 }]
+  - at: 1.2s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: ok, metric: 1, ttl: 300 }]
+  - at: 1.6s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: ok, metric: 1, ttl: 300 }]
+  # The transition.
+  - at: 2.0s
+    emit:
+      events: [{ host: ghost, service: ntfy.listen.connected, state: critical, metric: 0, ttl: 300 }]
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, host: ghost, service: ntfy.listen.connected, state: critical }
+
+    not_contains:
+      - { event: ntfy_post, service: ntfy.listen.connected, state: ok }
+
+    order:
+      - before: { event: ingest_response, status: 202 }
+        after:  { event: ntfy_post, state: critical }
+
+    count:
+      # The whole property in one assertion: six events in, one alert out.
+      - match: { event: ntfy_post, service: ntfy.listen.connected }
+        equals: 1
+
+    field_exists:
+      - match: { event: ntfy_post, state: critical }
+        field: prior_state
