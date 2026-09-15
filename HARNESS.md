@@ -264,6 +264,6 @@ Stated plainly, because a gap nobody wrote down is a gap nobody closes.
 
 `admission-429-on-loop-saturation` reaches its 429 by shrinking the inbox and the deadline rather than by outrunning the loop. Driving a 3.4-million-events-per-second loop into saturation from Python is not something this harness can do, so the scenario tests the admission path and says nothing about throughput. SCALE.md's flood floor is the observation that covers the other half.
 
-`backpressure-sheds-and-counts` asserts the accounting identity by its absence: a rule named `accounting-violation` matches `service == "riemann.accounting.residual" && metric != 0`, and the scenario requires that it never fires. That metric is not yet named in SPEC.md. It is the self-observation field the property needs, and if it lands under another name, one match string in one scenario changes.
+`backpressure-sheds-and-counts` asserts the accounting identity by its absence: a rule named `accounting-violation` matches `service == "riemann.accounting.residual" && metric != 0`, and the scenario requires that it never fires. SPEC.md's self-observation section names that metric and requires it to read zero at every sample, so a correct implementation makes this rule one that never fires.
 
 Nothing here drives SSE subscribe, dry run, explain, the ring, or the global-partition shard. Those are milestones 4 and 5, and each wants its own scenario before the generation claiming them can be validated: a property with no scenario is not enforced, whatever SPEC.md says about it.

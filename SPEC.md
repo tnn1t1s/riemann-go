@@ -284,6 +284,10 @@ riemann-go's own counters reach the trace only through `GET /metrics` as a `quer
 
 riemann-go emits its own queue depths, drop counts, loop lag, index size and per-node firing counts into its own index as ordinary events tagged `riemann`, so a rule can alert on `riemann.sink.ntfy.dropped > 0` with no new mechanism. The sampling interval is a parameter owned by the process, default 10 seconds with a `ttl` of twice that, carried from upstream's instrumentation rule (`src/riemann/core.clj:44-46`).
 
+The service names are part of the contract, because a rule matches on them. Each bounded queue named in `SCALE.md` emits `riemann.<queue>.depth`, `riemann.<queue>.capacity` and `riemann.<queue>.dropped`. Each shard emits `riemann.shard.loop_lag`, `riemann.shard.index_entries` and `riemann.shard.in_flight`. Ingest emits `riemann.ingest.accepted` and `riemann.ingest.rejected`.
+
+One more is required, and it is the only one that is a claim rather than a reading. `riemann.accounting.residual` carries `accepted - (processed + dropped + queued + in_flight)` summed across the process. `SCALE.md` states that identity; this event is how a scenario checks it without the harness learning what a shard is. A correct implementation emits zero at every sample, so a rule matching a non-zero residual is a rule that never fires, and a scenario asserts the absence.
+
 The core carries no dependency on any monitoring system to do this. It exposes a snapshot; whatever samples that snapshot and admits it through ingest lives at the edge. See `INVARIANTS.md` I8.
 
 ## Acceptance
