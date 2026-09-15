@@ -1,3 +1,13 @@
 probes/*/probe[0-9]
 probes/**/__pycache__/
 probes/**/*.log
+
+# Generations in progress. A generation that passes moves into releases/; one
+# that does not stays here with its report and its trace, uncommitted.
+scratch/*
+!scratch/.gitkeep
+!scratch/.gitkeep
+
+# Built binaries. The binary belonging to a release is committed inside that
+# release directory; nothing else is.
+riemannd
