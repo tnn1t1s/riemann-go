@@ -200,6 +200,12 @@ A `global` rule receives a copy of every event. A `host` or `host,service` rule 
 
 Sink leaves are `{"sink":"ntfy"}`, `{"sink":"influx"}` and `{"sink":"index"}`. A `{"ref":"name"}` leaf splices the named binding in place.
 
+**Deliberate divergence from the original.** Upstream's `test/riemann/streams_test.clj` is the semantic reference for every combinator above, and a generation should port those cases. Two behaviors depart from it on purpose. Where they disagree, this spec wins and the ported test is adjusted rather than the implementation.
+
+- **`by` frees a fork.** Upstream never does, and says so: "`(by)` streams are never garbage-collected" (`src/riemann/streams.clj:1577`), so its fork table grows for the life of the process. riemann-go frees a fork once the key's expired event has passed through it and no timer still references it. The observable consequence is that an identity which expires and later returns arrives at a fresh fork, so a `changed-state` beneath the `by` compares against its `initial` rather than against the state that identity held before it expired. This is a heuristic, not an invariant. It carries two counters, forks live and forks freed, so its effect can be watched, and it retires if that re-firing turns out to be unwanted. The check is a scenario that expires an identity, re-ingests it with the state it last held, and expects an alert.
+
+- **`stable` arms one timer per value change.** Upstream schedules several and lets them race: "it's simpler to just add N tasks during a flapping state and let them all fight it out" (`src/riemann/streams.clj:2018-2027`). riemann-go arms one generation-numbered entry and discards stale generations when they fire. The two agree while event times move forward, and differ only when event times go backwards, where riemann-go honors the most recent value change while upstream's outcome depends on task ordering. Property 12 is what makes the single-entry form reproducible under a scenario's timeline.
+
 **Node paths.** A firing names the path it traversed, and the path is mechanical so a scenario can assert on it:
 
 - The root of `stream` is `stream`; the root of a binding is `bindings/<name>`.
