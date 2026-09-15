@@ -1,16 +1,21 @@
 name: throttle-bounds-alerts
 description: >
   throttle passes at most `limit` events per `window_seconds` and drops the
-  rest. A stream flapping once a second through changed-state produces twenty
-  transitions; a throttle of 2 per 10 s must let a small bounded number
+  rest. A stream flapping four times a second through changed-state produces
+  twenty transitions; a throttle of 2 per 2 s must let a small bounded number
   through, not twenty. Ported from streams_test.clj throttle-test, and the
   shape the fleet's ntfy.listen.connected rule uses to keep a flapping
   listener reading as one burst rather than a page per flip.
 
+  The window is 2 s on the wall clock, not the fleet's 300 s. Window length is
+  a rule parameter the scenario chooses, while the combinator semantics are
+  what the corpus tests, and both exercise the same throttle. See HARNESS.md
+  "Time-domain scenarios use short real windows".
+
   The bound is asserted globally over the run rather than per window, because
-  the five operators have no time arithmetic. The stimulus spans twenty
-  seconds and the settle adds three, so at most three windows are touched and
-  the ceiling is 3 x limit. See HARNESS.md "Why there is no within_seconds".
+  the five operators have no time arithmetic. Twenty transitions arrive over
+  five seconds, so at most three windows are touched and the ceiling is
+  3 x limit. See HARNESS.md "Why there is no within_seconds".
 
 settle_seconds: 3
 
@@ -28,17 +33,18 @@ rules:
           children:
             - op: throttle
               limit: 2
-              window_seconds: 10
+              window_seconds: 2
               children:
                 - { sink: ntfy }
 
 stimulus:
-  # Twenty alternating events, one per second. Every one is a transition, so
-  # changed-state forwards all twenty and the throttle is what bounds them.
+  # Twenty events at 250 ms. Every one carries a distinct state, so every one
+  # is a transition: changed-state forwards all twenty and the throttle is
+  # what bounds them. Five seconds of stimulus spans three 2 s windows.
   - at: 0s
     emit_n:
       count: 20
-      interval: 1s
+      interval: 250ms
       batch_size: 1
       template:
         host: ghost

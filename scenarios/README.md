@@ -47,6 +47,17 @@ expect:
     field_exists:  [ { match: {...}, field: <name> } ]
 ```
 
+## Time-domain scenarios
+
+Throttle windows, stable windows and TTLs are counted on the wall clock in
+seconds, and a scenario settles within ten. There is no test clock, and a
+scenario never backdates the `time` field on a submitted event: timers fire on
+the wall clock, so a future timestamp advances no window, and a clock endpoint
+would let a generation pass under a fake clock with its real timers wrong.
+Window length is a rule parameter the scenario picks; the fleet's stall rule
+uses 600 seconds and a scenario uses 3, and both exercise the same combinator.
+HARNESS.md carries the full reasoning.
+
 ## Authoring rules
 
 - A rule body, a combinator tree, a threshold and a TTL are opaque to the

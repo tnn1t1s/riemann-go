@@ -254,12 +254,29 @@ def _finalize(
         warnings = list(warnings) + [f"trace build failed: {e}"]
 
     ok, matcher_report = matcher.evaluate(scenario.get("expect", {}), trace)
-    sink_connected = any(e.get("source") == "sink-receiver" for e in trace)
+
+    # Pipeline-stage signals behind the score categories. `rules_registered` is
+    # a proxy for "a rule fired"; the note at the top of score.py says why. A
+    # scenario that seeds no rules and puts none has nothing to register, so an
+    # empty rule surface counts as registered rather than as a rule_error.
+    events_admitted = any(
+        e.get("event") == "ingest_response" and (e.get("accepted") or 0) > 0
+        for e in trace
+    )
+    rule_puts = [
+        e for e in trace if e.get("event") == "rule_response" and e.get("kind") == "put"
+    ]
+    rules_registered = (not rule_puts) or any(
+        200 <= (e.get("status") or 0) < 300 for e in rule_puts
+    )
+    sink_reached = any(e.get("source") == "sink-receiver" for e in trace)
 
     s = score.compute(
         compiles=compiles,
         starts=starts,
-        sink_connected=sink_connected,
+        events_admitted=events_admitted,
+        rules_registered=rules_registered,
+        sink_reached=sink_reached,
         observer_ok=observer_ok,
         predicate_results=_assertion_summary(matcher_report),
     )
@@ -280,11 +297,13 @@ def _finalize(
         "trace": trace,
         "riemannd_log_tail": _tail(log_path),
     }
-    _write_outputs(args, report, trace)
+    _write_outputs(args, report, trace, log_path)
     return report
 
 
-def _write_outputs(args, report: Dict[str, Any], trace: List[Dict[str, Any]]) -> None:
+def _write_outputs(
+    args, report: Dict[str, Any], trace: List[Dict[str, Any]], log_path: Optional[str]
+) -> None:
     if args.report_out:
         os.makedirs(os.path.dirname(os.path.abspath(args.report_out)) or ".", exist_ok=True)
         with open(args.report_out, "w") as f:
@@ -294,6 +313,14 @@ def _write_outputs(args, report: Dict[str, Any], trace: List[Dict[str, Any]]) ->
         with open(args.trace_out, "w") as f:
             for ev in trace:
                 f.write(json.dumps(ev) + "\n")
+    if args.log_out:
+        # The diagnostician reads this, so it gets the whole log rather than
+        # the report's 40-line tail. Written even when empty, so an absent file
+        # means the harness did not get that far rather than that riemannd was
+        # quiet.
+        os.makedirs(os.path.dirname(os.path.abspath(args.log_out)) or ".", exist_ok=True)
+        with open(args.log_out, "w") as f:
+            f.write(_read_log(log_path))
 
 
 def _assertion_summary(matcher_report: dict) -> dict:
@@ -302,6 +329,16 @@ def _assertion_summary(matcher_report: dict) -> dict:
         for i, item in enumerate(items):
             out[f"{section}[{i}]"] = {"ok": item.get("ok", False)}
     return out
+
+
+def _read_log(path: Optional[str]) -> str:
+    if not path:
+        return ""
+    try:
+        with open(path) as f:
+            return f.read()
+    except Exception:
+        return ""
 
 
 def _tail(path: Optional[str], n: int = 40) -> str:
@@ -390,6 +427,7 @@ def main():
     p.add_argument("--ready-timeout", type=float, default=15.0)
     p.add_argument("--report-out", default=None)
     p.add_argument("--trace-out", default=None)
+    p.add_argument("--log-out", default=None, help="riemannd log, for the diagnostician")
     p.add_argument("--dry", action="store_true", help="self-test; needs no binary")
     p.add_argument("--fixture", default=os.path.join(_repo, "scenarios/fixtures/dry-run.json"))
     p.add_argument(

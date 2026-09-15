@@ -46,7 +46,7 @@ rules:
     match: 'service == "riemann.accounting.residual" && metric != 0'
     stream: { sink: ntfy }
 
-settle_seconds: 15
+settle_seconds: 10
 
 stimulus:
   # 100 ms per ntfy post. The queue holds 32; the flood is 2000.
@@ -85,11 +85,12 @@ expect:
       # Every batch was admitted: twenty batches of a hundred.
       - match: { event: ingest_response, status: 202 }
         equals: 20
-      # The sink shed. Two thousand events in, far fewer posts out, bounded by
-      # the settle window at 100 ms per post.
+      # The sink shed. Two thousand events in, far fewer posts out: the run is
+      # about eleven seconds and the oracle takes 100 ms per post, so the
+      # receiver cannot have seen more than about 110 of them.
       - match: { event: ntfy_post, rule: alert-all }
         min: 1
-        max: 400
+        max: 150
 
     field_exists:
       - match: { event: ntfy_post, rule: shed-detector }

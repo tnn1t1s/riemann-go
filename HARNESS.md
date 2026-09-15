@@ -136,6 +136,14 @@ Stimulus is opaque. A rule body, a combinator tree, a throttle limit and a TTL g
 
 The settle window is written into every report next to the actual wall clock, so an absent event is interpretable. A missing alert means the property failed, or it means the harness stopped looking too early, and a reader who cannot tell the difference cannot act on the report.
 
+### Time-domain scenarios use short real windows
+
+A throttle window, a stable window and a TTL are counted on the wall clock in seconds, and a scenario settles within ten. `throttle-bounds-alerts` uses `window_seconds: 2` and `expiry-becomes-event` a 2-second TTL, while a stable scenario, when one is written, uses 3. There is no test clock, and scenarios do not backdate the `time` field on submitted events.
+
+Two reasons, of which the first is the one that matters. A test-clock endpoint would be surface the spec does not have, and it would let a generation pass the whole corpus under a fake clock while its real timers were wrong, which is the failure the arena exists to catch. Backdating event timestamps substitutes for nothing, because timers fire on the wall clock in riemann-go as in upstream Clojure, so a future timestamp advances no throttle window.
+
+The cost is that a scenario cannot assert a ten-minute stall window, and that is the right trade. Window length is a rule parameter the scenario chooses, while the combinator semantics are what the corpus tests: the fleet's stall rule uses 600 seconds and a scenario uses 3, and the same `stable` runs under both. Short windows are affordable because there is no cluster to wait for.
+
 ## Process-lifecycle ownership
 
 The harness starts the sink receiver, starts riemannd through the adapter with the receiver's URL, waits for ready, seeds the rules, drives the timeline, settles, stops riemannd, stops the receiver, builds the trace, runs the matcher, and writes the report. Every one of those steps is in `harness/run.py`.
@@ -150,10 +158,16 @@ Readiness is `GET /healthz` returning 200, which SPEC.md's HTTP surface pins as 
 | --- | --- |
 | `compile_error` | binary missing or not executable |
 | `start_error` | process did not pass the ready check before the timeout |
-| `sink_connect_error` | started, but nothing ever reached the oracle |
+| `ingest_error` | ready, but no event was ever admitted |
+| `rule_error` | events admitted, but the rule surface never took a rule |
+| `sink_error` | rules registered, but nothing ever reached the oracle |
 | `observer_error` | the trace could not be built from what was recorded |
 | `predicate_violation` | one or more matcher assertions failed |
 | `GREEN` | every assertion held |
+
+The three middle categories name riemann-go's own pipeline stages, so a failed report says how far a generation got before it stopped working.
+
+`rule_error` is a proxy and the deviation is deliberate. It should mean "events admitted but no rule ever fired", and a firing is not observable from the sink receiver alone: one that reaches a sink cannot be told apart from ordinary sink traffic, and one that goes to the `index` sink reaches no external process at all. What the scorer checks is whether any rule was registered successfully, which still separates a broken rule surface from a broken sink path. Carrying the intended meaning would need a firing counter on the read surface, which is a SPEC.md question.
 
 The matcher's verdict is the final arbiter. Categories classify a failure and never gate a pass, so a scenario whose assertions all held is GREEN even when no sink was posted to, because a scenario can assert exactly that silence.
 
@@ -192,7 +206,7 @@ count:
     equals: 1
 ```
 
-**`throttle-bounds-alerts`**, from `streams_test.clj` throttle-test, and the shape the fleet's `ntfy.listen.connected` rule runs today. Twenty transitions through a throttle of 2 per 10 s:
+**`throttle-bounds-alerts`**, from `streams_test.clj` throttle-test, and the shape the fleet's `ntfy.listen.connected` rule runs today. Twenty transitions over five seconds through a throttle of 2 per 2 s:
 
 ```yaml
 count:
