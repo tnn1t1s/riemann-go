@@ -1,0 +1,3 @@
+probes/*/probe[0-9]
+probes/**/__pycache__/
+probes/**/*.log
