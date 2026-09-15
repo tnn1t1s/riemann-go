@@ -108,6 +108,9 @@ class Adapter:
     def put_rule(self, rule_id: str, body: Dict[str, Any]) -> requests.Response:
         return requests.put(f"{self._base()}/rules/{rule_id}", json=body, timeout=10)
 
+    def get_rule(self, rule_id: str) -> requests.Response:
+        return requests.get(f"{self._base()}/rules/{rule_id}", timeout=10)
+
     def delete_rule(self, rule_id: str) -> requests.Response:
         return requests.delete(f"{self._base()}/rules/{rule_id}", timeout=10)
 

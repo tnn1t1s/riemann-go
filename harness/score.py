@@ -7,15 +7,14 @@ no sink was ever posted to, because some scenarios assert exactly that.
 The three middle categories name riemann-go's own pipeline stages, so a failed
 report says how far a generation got before it stopped working.
 
-One of them is a proxy rather than a direct observation, and the deviation is
-deliberate. `rule_error` is meant to be "events admitted but no rule ever
-fired", and a rule firing is not observable from the sink receiver on its own:
-a firing that reaches a sink cannot be told apart from sink traffic, and a
-firing into the `index` sink reaches no external process at all. What this
-scorer observes instead is whether any rule was registered successfully, which
-still separates a broken rule surface from a broken sink path. Making the
-intended meaning observable would need a firing counter on the read surface,
-which is a SPEC.md question rather than a harness one.
+`rule_error` means events were admitted and no rule ever fired. A firing is
+not visible at the sink receiver on its own, because a firing that reaches a
+sink is indistinguishable from sink traffic and a firing into the `index` sink
+reaches no external process at all. The runner therefore reads each seeded
+rule's node counters after settle, which SPEC.md's rule read endpoint returns,
+and a rule whose every node reads zero has not fired. That read is harness
+evidence rather than oracle evidence, which is acceptable here because it
+classifies a failure and no scenario asserts on it.
 """
 
 from typing import Any, Dict

@@ -167,7 +167,7 @@ Readiness is `GET /healthz` returning 200, which SPEC.md's HTTP surface pins as 
 
 The three middle categories name riemann-go's own pipeline stages, so a failed report says how far a generation got before it stopped working.
 
-`rule_error` is a proxy and the deviation is deliberate. It should mean "events admitted but no rule ever fired", and a firing is not observable from the sink receiver alone: one that reaches a sink cannot be told apart from ordinary sink traffic, and one that goes to the `index` sink reaches no external process at all. What the scorer checks is whether any rule was registered successfully, which still separates a broken rule surface from a broken sink path. Carrying the intended meaning would need a firing counter on the read surface, which is a SPEC.md question.
+`rule_error` means events were admitted and no rule ever fired. A firing is not visible at the sink receiver on its own: one that reaches a sink cannot be told apart from ordinary sink traffic, and one that goes to the `index` sink reaches no external process at all. After settle the runner reads each seeded rule's node counters, which SPEC.md's `GET /rules/{id}` returns, and a rule whose every node reads zero has not fired. That read is harness evidence rather than oracle evidence. It is acceptable here because it classifies a failure and no scenario asserts on it; an assertion resting on it would be the implementation grading itself.
 
 The matcher's verdict is the final arbiter. Categories classify a failure and never gate a pass, so a scenario whose assertions all held is GREEN even when no sink was posted to, because a scenario can assert exactly that silence.
 

@@ -102,6 +102,30 @@ class Driver:
             )
         )
 
+    def read_rule_counters(self, rule_ids) -> None:
+        """After settle, ask each seeded rule whether any node passed an event.
+
+        Failure classification only. Nothing asserts on it.
+        """
+        for rule_id in rule_ids:
+            try:
+                resp = self.adapter.get_rule(rule_id)
+            except Exception:
+                continue
+            fired = False
+            status = resp.status_code
+            if 200 <= status < 300:
+                try:
+                    counters = resp.json().get("counters") or {}
+                    fired = any((counters.get(k) or 0) > 0 for k in counters)
+                except Exception:
+                    fired = False
+            self.events.append(
+                observer.rule_response_event(
+                    time.time(), "get", rule_id, status, None, fired=fired
+                )
+            )
+
     def apply(self, event: Dict[str, Any]) -> None:
         if "emit" in event:
             spec = event["emit"]
@@ -231,6 +255,7 @@ def run(args) -> Dict[str, Any]:
             driver.apply(event)
 
         time.sleep(settle_seconds)
+        driver.read_rule_counters(rule["id"] for rule in scenario.get("rules", []) or [])
         return _finalize(
             args, scenario, receiver, driver.events,
             compiles=True, starts=True, observer_ok=True, warnings=[],
@@ -269,13 +294,17 @@ def _finalize(
     rules_registered = (not rule_puts) or any(
         200 <= (e.get("status") or 0) < 300 for e in rule_puts
     )
+    rule_gets = [
+        e for e in trace if e.get("event") == "rule_response" and e.get("kind") == "get"
+    ]
+    rules_fired = (not rule_gets) or any(e.get("fired") for e in rule_gets)
     sink_reached = any(e.get("source") == "sink-receiver" for e in trace)
 
     s = score.compute(
         compiles=compiles,
         starts=starts,
         events_admitted=events_admitted,
-        rules_registered=rules_registered,
+        rules_registered=rules_registered and rules_fired,
         sink_reached=sink_reached,
         observer_ok=observer_ok,
         predicate_results=_assertion_summary(matcher_report),

@@ -153,7 +153,7 @@ Renaming a path or changing a verb is a wire break. Capabilities are added as ne
 
 - `PUT /rules/{id}` — `200` when the content hash is unchanged, `201` when a new version is created. Body of either is the stored rule document with `version`. `400` on a rule that does not compile, with a message naming the node path or the expression that failed.
 - `GET /rules` — `200` with an array of rule documents.
-- `GET /rules/{id}` — `200` with the rule document, `404` when unknown.
+- `GET /rules/{id}` — `200` with the rule document plus `counters`, an object mapping each node path in the rule's tree to the number of events that node has passed downstream since the current version was installed, `404` when unknown. A rule that has never matched anything reports zero at every node, which is how a caller distinguishes a rule that is not firing from a rule that is firing into the index where nothing external can see it.
 - `DELETE /rules/{id}` — `204` on delete, `404` when unknown.
 - `POST /rules/{id}/dryrun` — `200` with `{"firings":[...]}`, one entry per sink stub delivery, each carrying the sink name, the event as the stub received it, and the node path. `404` when unknown.
 

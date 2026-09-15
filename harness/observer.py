@@ -142,9 +142,14 @@ def ingest_response_event(
 
 
 def rule_response_event(
-    ts: float, kind: str, rule_id: str, status: int, version: Optional[Any]
+    ts: float,
+    kind: str,
+    rule_id: str,
+    status: int,
+    version: Optional[Any],
+    fired: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    return {
+    ev = {
         "ts": float(ts),
         "source": "harness",
         "event": "rule_response",
@@ -153,6 +158,13 @@ def rule_response_event(
         "status": status,
         "version": version,
     }
+    # `fired` is set only on a `get`, from the counters SPEC.md's rule read
+    # endpoint returns. It classifies a failure and no scenario asserts on it:
+    # a rule firing into the index reaches no external process, so this is the
+    # only honest way to tell "no rule fired" from "no sink was reached".
+    if fired is not None:
+        ev["fired"] = bool(fired)
+    return ev
 
 
 def query_response_event(ts: float, kind: str, **fields: Any) -> Dict[str, Any]:
