@@ -2,8 +2,8 @@ name: backpressure-sheds-and-counts
 description: >
   A slow sink alone never produces a 429, because the shard loop never blocks
   on a sink. It sheds at the sink queue, counts every drop, and the accounting
-  identity stays exact. SCOPE.md invariants 3, 4 and 6, and the observation in
-  SCOPE.md "Wire and backpressure": with a sink sleeping 50 ms per event, ten
+  identity stays exact. INVARIANTS.md I3, I4 and the accounting identity in SCALE.md, and the observation in
+  SCALE.md: with a sink sleeping 50 ms per event, ten
   thousand events got a hundred replies of 202 and the sink dropped 8,998 of
   them.
 
@@ -37,7 +37,7 @@ rules:
 
   # The accounting identity, asserted by its absence. `riemann.accounting.residual`
   # is the self-observation field this property needs and SPEC.md must pin: it
-  # is accepted - (processed + dropped + queued + in_flight), and SCOPE.md
+  # is accepted - (processed + dropped + queued + in_flight), and SPEC.md
   # invariant 6 says it is exactly zero. If SPEC.md names it differently, this
   # rule's match string changes and nothing else does.
   - id: accounting-violation

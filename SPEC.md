@@ -120,6 +120,9 @@ The binary is `riemannd`. It takes no subcommand.
 | `--influx-bucket` | yes | string | InfluxDB bucket. |
 | `--rules` | yes | string | Path to a JSON file holding an array of rule documents, loaded at startup. |
 | `--shards` | no | integer | Number of event partitions. Default `runtime.GOMAXPROCS(0)`. |
+| `--set` | no | `name=value`, repeatable | Sets one parameter named in `SCALE.md`. An unrecognised name is fatal at startup, named in the error. |
+
+`--set` exists because `SCALE.md` calls those values parameters. A parameter with no way to set it is a constant, and a document that calls it otherwise is wrong. One repeatable flag keeps the surface flat: a new parameter in `SCALE.md` adds no new flag, and a name the binary does not know fails at startup rather than being ignored, which is property 17 applied to configuration rather than to a missing flag.
 
 Flag names are double-dash long form. Short aliases are not part of the contract. A missing required flag is property 17: exit non-zero naming the flag, bind nothing, start no goroutine that talks to a sink.
 

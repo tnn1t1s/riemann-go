@@ -1,7 +1,7 @@
 name: rule-lifecycle
 description: >
   A rule is a resource. PUT it and it fires; DELETE it and it stops firing.
-  SCOPE.md "Rules", Lifecycle. The delete half is the half that matters: a
+  SPEC.md property 14 and "Rule document (normative)". The delete half is the half that matters: a
   rule registry that never removes an instance passes every other scenario in
   this corpus.
 

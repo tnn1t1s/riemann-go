@@ -2,7 +2,7 @@ name: expiry-becomes-event
 description: >
   An index entry whose time + ttl has passed produces an event with host and
   service kept and state `expired`, delivered to rules like any other event.
-  SCOPE.md invariant 2, carried from src/riemann/core.clj:274-308.
+  SPEC.md property 4, carried from src/riemann/core.clj:274-308.
 
   This is the scenario that makes the index observable through the oracle at
   all. Nothing else in the corpus proves the index exists: without expiry, an

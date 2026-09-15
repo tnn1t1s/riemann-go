@@ -3,9 +3,9 @@ description: >
   The case that does produce a 429, and the emitter sees it. When the shard
   inbox is full and stays full past the admission deadline, the reply is 429
   with an accepted count and a rejected count, and the admitted events are not
-  rolled back. SCOPE.md invariant 9 and "Wire and backpressure".
+  rolled back. SPEC.md property 2 and "Wire and backpressure".
 
-  Saturation is produced by configuring SCOPE.md's own parameters, not by a
+  Saturation is produced by configuring SCALE.md's own parameters, not by a
   probe-only knob: a tiny inbox and a one-millisecond deadline mean a batch
   larger than the inbox cannot be fully admitted at any loop speed. That makes
   the property reachable without a 3.4-million-events-per-second flood from
@@ -70,7 +70,7 @@ expect:
 
     field_exists:
       # A 429 that does not say how many were admitted leaves the emitter
-      # unable to count its own loss, which is the contract in SCOPE.md "Users".
+      # unable to count its own loss, which is the contract in the emitter contract in riemann-atlas's VOCABULARY.md.
       - match: { event: ingest_response, status: 429 }
         field: accepted
       - match: { event: ingest_response, status: 429 }

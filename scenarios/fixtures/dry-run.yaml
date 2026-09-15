@@ -33,8 +33,8 @@ expect:
       - match: { event: ntfy_post, rule: atlas-cost }
         field: prior_state
       - match: { event: ntfy_post, rule: atlas-cost }
-        field: rule_version
+        field: version
       - match: { event: ntfy_post, rule: atlas-cost }
-        field: node_path
+        field: node
       - match: { event: influx_write }
         field: bucket

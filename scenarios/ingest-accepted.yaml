@@ -1,9 +1,9 @@
 name: ingest-accepted
 description: >
   One event posted to /events is admitted and reaches the InfluxDB sink
-  carrying its own identity. Asserts the ingest contract of SCOPE.md "Wire and
+  carrying its own identity. Asserts the ingest contract of SPEC.md "HTTP surface" and
   backpressure" (202 with an accepted count) and the sink contract of
-  SCOPE.md "Sinks". This is the scenario that fails first if nothing works.
+  SPEC.md "Alert shape (normative)". This is the scenario that fails first if nothing works.
 
 settle_seconds: 5
 
@@ -37,7 +37,7 @@ expect:
 
     order:
       # A rule must be registered before it can route an event to a sink. The
-      # 202 is deliberately not the `before` here: SCOPE.md says the server
+      # 202 is deliberately not the `before` here: SPEC.md says the server
       # makes no promise that an accepted event reached any sink, so ordering
       # the reply against the write would assert a race rather than a property.
       - before: { event: rule_response, kind: put, id: archive-all }

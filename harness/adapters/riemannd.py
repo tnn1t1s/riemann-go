@@ -1,9 +1,9 @@
 """Surface adapter for the `riemannd` binary.
 
-Ground truth for everything in this file is SPEC.md's CLI and HTTP sections.
-SPEC.md is being written; until its CLI section is normative, the flag names
-below are this adapter's proposal and the single place to change if they land
-differently. Nothing outside this file names a flag, a path or a port.
+Ground truth for everything in this file is SPEC.md's CLI and HTTP sections,
+both normative. This file is the only place in the harness that names a flag,
+a path or a port; if the spec's surface moves, it moves here and nowhere
+else.
 
 The adapter knows surface only. `ttl`, `state`, `metric`, a rule's combinator
 tree, a throttle limit: all opaque, forwarded exactly as the scenario wrote
@@ -38,10 +38,14 @@ class Adapter:
         self.influx_url = influx_url
         self.log_path = log_path
         self.state_dir = state_dir
-        # A scenario's `config:` block, passed through as `--set key=value`.
-        # These are SCOPE.md's own parameter names. The adapter does not know
-        # what any of them mean and must not learn: it renders key and value
-        # as text and hands them over.
+        # SPEC.md: --rules is a path to a JSON file holding an array of rule
+        # documents, loaded at startup. The harness seeds the scenario's rules
+        # over PUT /rules/{id} instead, so this file starts empty.
+        self.rules_path = os.path.join(state_dir, "rules.json")
+        # A scenario's `config:` block, passed through as `--set key=value`,
+        # per SPEC.md's CLI section. The names are SCALE.md's parameters. The
+        # adapter does not know what any of them mean and must not learn: it
+        # renders key and value as text and hands them over.
         self.config = dict(config or {})
         self._proc: Optional[subprocess.Popen] = None
         self._log_file = None
@@ -50,18 +54,17 @@ class Adapter:
 
     def start_command(self) -> List[str]:
         # Every URL, port and token appears here and only here, which is what
-        # SCOPE.md "Package layout" requires of cmd/riemannd.
+        # SPEC.md's implementation guidance requires of cmd/riemannd.
         argv = [
             self.binary,
             "serve",
             "--listen", self.listen_addr,
-            "--rules", os.path.join(self.state_dir, "rules"),
+            "--rules", self.rules_path,
             "--ntfy-url", self.ntfy_url,
             "--ntfy-topic", self.ntfy_topic,
             "--influx-url", self.influx_url,
             "--influx-org", "arena",
             "--influx-bucket", "arena",
-            "--influx-token", "arena-token",
         ]
         for key, value in self.config.items():
             argv += ["--set", f"{key}={value}"]
@@ -88,17 +91,13 @@ class Adapter:
             self._log_file = None
 
     def ready(self) -> bool:
-        # SCOPE.md pins `GET /rules` as part of the read surface and names no
-        # dedicated health endpoint. Serving the rule list is the readiness
-        # claim this adapter makes; if SPEC.md adds one, this method changes.
+        # SPEC.md's HTTP surface pins `GET /healthz` returning 200 as the
+        # readiness claim. The adapter asks that and nothing else.
         try:
-            r = requests.get(f"{self._base()}/rules", timeout=2)
-            return r.status_code == 200
-        except Exception:
+            r = requests.get(f"{self._base()}/healthz", timeout=2)
+        except requests.RequestException:
             return False
-
-    def _base(self) -> str:
-        return f"http://{self.listen_addr}"
+        return r.status_code == 200
 
     # ---- surface ---------------------------------------------------------
 

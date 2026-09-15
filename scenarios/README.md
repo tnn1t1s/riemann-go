@@ -7,7 +7,7 @@ and the trace the run must produce. The grammar is defined in `../HARNESS.md`.
 name: <string>
 description: <string>
 
-config:                     # SCOPE.md parameter names, passed to riemannd as
+config:                     # SCALE.md parameter names, passed to riemannd as
   shard.inbox_capacity: 8   # --set key=value. Opaque to the harness.
 
 settle_seconds: <number>    # wait after the last stimulus before reading the
@@ -66,7 +66,7 @@ expect:
 
 ## The corpus
 
-| File | Property, and where SCOPE.md states it |
+| File | Property, and where SPEC.md states it |
 | --- | --- |
 | `ingest-accepted.yaml` | An event is admitted with 202 and reaches the InfluxDB sink. "Wire and backpressure", "Sinks". |
 | `expiry-becomes-event.yaml` | `time + ttl` produces a state `expired` event delivered to rules. Invariant 2. |

@@ -180,7 +180,8 @@ def run(args) -> Dict[str, Any]:
 
     receiver = sinks.SinkReceiver().start()
     state_dir = tempfile.mkdtemp(prefix="riemann-arena-")
-    os.makedirs(os.path.join(state_dir, "rules"), exist_ok=True)
+    with open(os.path.join(state_dir, "rules.json"), "w") as fh:
+        fh.write("[]\n")
     log_path = os.path.join(state_dir, "riemannd.log")
     listen_addr = args.listen or f"127.0.0.1:{free_port()}"
 

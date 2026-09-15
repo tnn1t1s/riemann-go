@@ -12,6 +12,7 @@ Two sources of evidence, distinguished by the `source` field:
                   surface, not about the world. Used sparingly.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 
 from harness import sinks
@@ -25,29 +26,47 @@ _NAME_PRIORITY = {
     "ntfy_post": 4,
 }
 
-# Provenance keys the observer lifts out of an ntfy publish body, per
-# SCOPE.md "Sinks": every alert names the rule, its version, its owner, the
-# prior state a changed-state left, and the node path traversed.
+# Provenance keys, per SPEC.md "Alert shape (normative)". They ride inside the
+# ntfy `message` body, on a line beginning with the marker below, because the
+# ntfy server discards top-level fields it does not recognize. The marker and
+# the key set are pinned verbatim by the spec, so lifting them is a mechanical
+# read and not an interpretation of prose.
+_PROVENANCE_MARKER = "riemann-go: "
+
 _PROVENANCE_KEYS = (
     "rule",
-    "rule_version",
+    "version",
     "owner",
-    "prior_state",
-    "node_path",
     "host",
     "service",
     "state",
     "metric",
+    "prior_state",
+    "node",
 )
 
 
 def ntfy_provenance(body: Dict[str, Any]) -> Dict[str, Any]:
     """Lift the provenance fields out of a decoded ntfy publish body.
 
-    This function follows SPEC.md's observability contract and is the only
-    place that changes if the placement of those fields moves.
+    This function follows SPEC.md's alert shape and is the only place that
+    changes if the placement of those fields moves. A publish carrying no
+    marker line yields every key as None, so a scenario asserting on
+    provenance fails rather than passing on absent evidence.
     """
-    return {k: body.get(k) for k in _PROVENANCE_KEYS}
+    found: Dict[str, Any] = {}
+    message = body.get("message")
+    if isinstance(message, str):
+        for line in message.splitlines():
+            if line.startswith(_PROVENANCE_MARKER):
+                try:
+                    parsed = json.loads(line[len(_PROVENANCE_MARKER):])
+                except ValueError:
+                    break
+                if isinstance(parsed, dict):
+                    found = parsed
+                break
+    return {k: found.get(k) for k in _PROVENANCE_KEYS}
 
 
 def _ntfy_event(rec: Dict[str, Any]) -> Dict[str, Any]:

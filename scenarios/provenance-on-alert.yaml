@@ -2,8 +2,7 @@ name: provenance-on-alert
 description: >
   Every ntfy post names the rule that produced it, that rule's version, its
   owner, the prior state changed-state left, and the node path traversed, so
-  an alert consumer can act without opening the config. SCOPE.md "Sinks" and
-  the Alert consumer row of SCOPE.md "Users". The existing Clojure alert
+  an alert consumer can act without opening the config. SPEC.md "Alert shape (normative)". The existing Clojure alert
   format carries none of these, which is why this is a scenario and not an
   assumption.
 
@@ -79,12 +78,12 @@ expect:
 
     field_exists:
       - match: { event: ntfy_post, rule: atlas-cost }
-        field: rule_version
+        field: version
       - match: { event: ntfy_post, rule: atlas-cost }
         field: owner
       - match: { event: ntfy_post, rule: atlas-cost }
         field: prior_state
       - match: { event: ntfy_post, rule: atlas-cost }
-        field: node_path
+        field: node
       - match: { event: ntfy_post, rule: atlas-cost }
         field: metric

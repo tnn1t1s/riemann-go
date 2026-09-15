@@ -44,13 +44,13 @@ Every line carries four keys, whatever else it holds:
 
 | event | fields | source |
 | --- | --- | --- |
-| `ntfy_post` | `topic`, `title`, `message`, `priority`, `tags`, `rule`, `rule_version`, `owner`, `prior_state`, `node_path`, `host`, `service`, `state`, `metric`, `raw` | sink-receiver |
+| `ntfy_post` | `topic`, `title`, `message`, `priority`, `tags`, `rule`, `version`, `owner`, `prior_state`, `node`, `host`, `service`, `state`, `metric`, `raw` | sink-receiver |
 | `influx_write` | `measurement`, `host`, `service`, `state`, `metric`, `time`, `org`, `bucket`, `precision`, `raw` | sink-receiver |
 | `ingest_response` | `status`, `accepted`, `rejected` | harness |
 | `query_response` | `kind`, plus query-specific fields | harness |
 | `rule_response` | `kind`, `id`, `status`, `version` | harness |
 
-The split matters more than the field lists. A `ntfy_post` or an `influx_write` is evidence that something reached a process riemann-go does not control. The other three record what riemann-go said when the harness asked, which is weaker, and a scenario that leans on them is grading the implementation against itself. Two contracts genuinely live at the reply surface and belong there: the 202-with-an-accepted-count of SCOPE.md's ingest path, and rule registration, where the PUT succeeding is the property. Everything else asserts on a sink.
+The split matters more than the field lists. A `ntfy_post` or an `influx_write` is evidence that something reached a process riemann-go does not control. The other three record what riemann-go said when the harness asked, which is weaker, and a scenario that leans on them is grading the implementation against itself. Two contracts genuinely live at the reply surface and belong there: the 202-with-an-accepted-count of SPEC.md's ingest path, and rule registration, where the PUT succeeding is the property. Everything else asserts on a sink.
 
 Provenance extraction from an ntfy body is one function, `observer.ntfy_provenance`. It follows SPEC.md's observability contract and is the only place that changes if the placement of those fields moves; nothing else in the harness reads a rule id or a prior state out of a request.
 
@@ -99,7 +99,7 @@ The condition for revisiting this: a scenario whose property is a rate that a fi
 name: <string>
 description: <string>
 
-config:                     # SCOPE.md parameter names, rendered by the adapter
+config:                     # SCALE.md parameter names, rendered by the adapter
   shard.inbox_capacity: 8   # as --set key=value. Neither half is interpreted.
 
 settle_seconds: <number>    # wait after the last stimulus before reading the
@@ -142,7 +142,7 @@ The harness starts the sink receiver, starts riemannd through the adapter with t
 
 The adapter owns four things and no more: the start command including every URL and port, the ready check, the event and rule surfaces, and the index query. It cannot skip a stop or start with different state, because it never decides when either happens.
 
-Readiness is `GET /rules` returning 200. SCOPE.md pins that endpoint and names no dedicated health endpoint, so serving the rule list is the readiness claim this adapter makes, and one method changes if SPEC.md adds one.
+Readiness is `GET /healthz` returning 200, which SPEC.md's HTTP surface pins as the readiness claim. The adapter asks that and nothing else.
 
 ## Score categories
 
@@ -163,7 +163,7 @@ A new riemann-go capability should require a new scenario, always. It should alm
 
 ## Worked example: eight properties, five operators
 
-Every scenario in `scenarios/` below, with the assertion that carries its property and the SCOPE.md statement it comes from.
+Every scenario in `scenarios/` below, with the assertion that carries its property and the SPEC.md statement it comes from.
 
 **`ingest-accepted`**, the ingest contract of "Wire and backpressure" and the sink contract of "Sinks":
 
@@ -201,14 +201,14 @@ count:
     max: 6
 ```
 
-**`provenance-on-alert`**, SCOPE.md "Sinks" and the Alert consumer row of "Users":
+**`provenance-on-alert`**, SPEC.md "Alert shape (normative)":
 
 ```yaml
 field_exists:
-  - { match: { event: ntfy_post, rule: atlas-cost }, field: rule_version }
+  - { match: { event: ntfy_post, rule: atlas-cost }, field: version }
   - { match: { event: ntfy_post, rule: atlas-cost }, field: owner }
   - { match: { event: ntfy_post, rule: atlas-cost }, field: prior_state }
-  - { match: { event: ntfy_post, rule: atlas-cost }, field: node_path }
+  - { match: { event: ntfy_post, rule: atlas-cost }, field: node }
 ```
 
 **`rule-lifecycle`**, "Rules", Lifecycle. The DELETE half is the half that matters, and it is a silence, so the post-delete event gets a distinguishing state:
@@ -231,7 +231,7 @@ not_contains:
   - { event: ntfy_post, rule: accounting-violation }
 ```
 
-The threshold comparison lives in the rule, not in the matcher. `shed-detector` matches `service == "riemann.sink.ntfy.dropped" && metric > 0`, so "drops were counted" becomes the plain existence of an alert, and the matcher needs no comparison operator to check it. Self-observation being an ordinary event stream is what makes that work, and it is why SCOPE.md's decision to route the gauges through ingest pays off in validation rather than only on a dashboard.
+The threshold comparison lives in the rule, not in the matcher. `shed-detector` matches `service == "riemann.sink.ntfy.dropped" && metric > 0`, so "drops were counted" becomes the plain existence of an alert, and the matcher needs no comparison operator to check it. Self-observation being an ordinary event stream is what makes that work, and it is why the decision to route the gauges through ingest pays off in validation rather than only on a dashboard.
 
 **`admission-429-on-loop-saturation`**, invariant 9, with a 500-event batch offered to an inbox of 8 under a 1 ms deadline:
 
@@ -262,8 +262,8 @@ The self-test then runs a negative control, a pattern that must not match, and f
 
 Stated plainly, because a gap nobody wrote down is a gap nobody closes.
 
-`admission-429-on-loop-saturation` reaches its 429 by shrinking the inbox and the deadline rather than by outrunning the loop. Driving a 3.4-million-events-per-second loop into saturation from Python is not something this harness can do, so the scenario tests the admission path and says nothing about throughput. SCOPE.md's milestone 3 flood is the observation that covers the other half.
+`admission-429-on-loop-saturation` reaches its 429 by shrinking the inbox and the deadline rather than by outrunning the loop. Driving a 3.4-million-events-per-second loop into saturation from Python is not something this harness can do, so the scenario tests the admission path and says nothing about throughput. SCALE.md's flood floor is the observation that covers the other half.
 
-`backpressure-sheds-and-counts` asserts the accounting identity by its absence: a rule named `accounting-violation` matches `service == "riemann.accounting.residual" && metric != 0`, and the scenario requires that it never fires. That metric is not named in SCOPE.md. It is the self-observation field the property needs, SPEC.md has to pin it, and if it lands under another name, one match string in one scenario changes.
+`backpressure-sheds-and-counts` asserts the accounting identity by its absence: a rule named `accounting-violation` matches `service == "riemann.accounting.residual" && metric != 0`, and the scenario requires that it never fires. That metric is not yet named in SPEC.md. It is the self-observation field the property needs, and if it lands under another name, one match string in one scenario changes.
 
 Nothing here drives SSE subscribe, dry run, explain, the ring, or the global-partition shard. Those are milestones 4 and 5, and each wants its own scenario before the generation claiming them can be validated: a property with no scenario is not enforced, whatever SPEC.md says about it.
