@@ -21,6 +21,16 @@ The semantics being kept, in the original.
 
 Two cautions. Upstream's `by` never frees a fork, and riemann-go does; upstream's `stable` schedules racing tasks, and riemann-go uses one generation-numbered heap entry. `SPEC.md` states both departures, and where it does, the spec is right and the Clojure is context.
 
+## The fleet this runs for
+
+What the emitters already send, and what the existing sink already does. The spec pins behavior that comes from these files; a generator that has not read them will invent a different answer and be wrong in a way no compiler catches.
+
+| Path | What to read it for |
+| --- | --- |
+| `~/Developer/riemann-atlas/VOCABULARY.md` | The emitter contract: cumulative counters, no content, fire-and-forget. Its rule that emission never affects the agent is why backpressure here means shedding and counting rather than blocking a caller. |
+| `~/Developer/pyntfy/docs/metrics.md` | The names, kinds, cadences and TTLs the ntfy listeners emit, including the 30 second heartbeat with a 90 second TTL that makes expiry the alert rather than the beat. |
+| `~/Developer/riemann/src/riemann/ntfy.clj` | The fleet's current ntfy sink, including the state-to-priority mapping that `SPEC.md` keeps normative. |
+
 ## Design probes
 
 Five standalone programs under `probes/`, each answering one question, each its own Go module, none imported by the server. `probes/README.md` says what each one measured and how to run it. Read them for the reasoning behind a default, not as code to copy: they are evidence, and several of the spec's parameter values cite them.
