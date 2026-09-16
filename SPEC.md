@@ -78,7 +78,7 @@ Each property is a MUST that a scenario asserts against the trace. A property wi
 
 3. **Validation fails fast.** A batch containing an event with no `host`, or no `service`, is rejected with `400`. A batch over `ingest.max_batch_events` or `ingest.max_batch_bytes` is rejected with `413`. Neither status admits any event from that batch.
 
-4. **Expiry is an event, not a deletion.** When `time + ttl` passes for an indexed entry, riemann-go produces an event carrying that entry's `host` and `service` with `state` equal to `expired`, and delivers it to rules exactly as an ingested event. A rule matching `state == "expired"` therefore fires at a sink with no further ingest.
+4. **Expiry is an event, not a deletion.** When `time + ttl` passes for an indexed entry, riemann-go produces an event carrying that entry's `host` and `service` with `state` equal to `expired`, and delivers it to rules exactly as an ingested event. A rule matching `state == "expired"` therefore fires at a sink with no further ingest. The synthesized event carries `ttl` 0 and no metric. Zero rather than the model default, because the event's whole content is that an identity stopped being live, and a sixty second lease would assert the opposite. It is synthesized rather than ingested, so the schema's absent-field default does not apply to it.
 
 5. **The index holds the last event per identity.** `GET /index/{host}/{service}` returns the most recently indexed event for that pair, or `404` when no entry exists or the entry has expired.
 
@@ -195,7 +195,7 @@ A `global` rule receives a copy of every event. A `host` or `host,service` rule 
 | `by` | `fields` | Forks state per distinct tuple of those event fields. Children below the fork hold independent state per key. |
 | `changed-state` | `initial` | Passes an event only when its `state` differs from the state the previous event left for this fork key. `initial` is the assumed prior state before any event. |
 | `throttle` | `limit`, `window_seconds` | Passes at most `limit` events per fork key per window. Excess is discarded. |
-| `splitp` | `test`, `branches`, `otherwise` | `test` is an expression containing `{}`, which each branch's `threshold` substitutes. The first branch whose test holds receives the event; `otherwise` receives it when none does. |
+| `splitp` | `test`, `branches`, `otherwise` | `test` is an expression containing `{}`, which each branch's `threshold` substitutes. Each entry of `branches` is an object with exactly two keys: `threshold`, the value substituted into `test`, and `stream`, the subtree that receives the event. `otherwise` holds a subtree directly. The first branch whose test holds receives the event; `otherwise` receives it when none does. |
 | `set` | `fields` | Each value is an expression evaluated against the incoming event. Produces a new event with those fields replaced. |
 | `coalesce` | none | Holds the latest event per identity and emits the current set as `events` to its children whenever one changes. |
 | `ddt` | none | Emits the rate of change of `metric` per second between consecutive events for a fork key. |
@@ -213,7 +213,7 @@ Sink leaves are `{"sink":"ntfy"}`, `{"sink":"influx"}` and `{"sink":"index"}`. A
 
 - The root of `stream` is `stream`; the root of a binding is `bindings/<name>`.
 - The k-th entry of a node's `children` array appends `/<k>`.
-- The k-th entry of a `splitp` node's `branches` appends `/branches/<k>`; `otherwise` appends `/otherwise`.
+- The k-th entry of a `splitp` node's `branches` appends `/branches/<k>`; `otherwise` appends `/otherwise`. The `stream` key inside a branch entry contributes no segment, so the node it holds sits at `.../branches/<k>` itself, and a sink in that node's `children` is `.../branches/<k>/0`. A node is never named by its `op`; every segment is an index or one of the two literals above.
 - A `{"ref":"name"}` leaf does not appear in the path. The nodes it splices in carry their binding-rooted path.
 
 So the ntfy leaf in the rule above has the path `stream/0/0/0`.

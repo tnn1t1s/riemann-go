@@ -24,14 +24,14 @@ rules:
       test: "{} < metric"
       branches:
         - threshold: 20.0
-          child:
+          stream:
             op: set
             fields: { state: '"critical"' }
             children:
               - { sink: index }
               - { ref: transition }
         - threshold: 5.0
-          child:
+          stream:
             op: set
             fields: { state: '"warning"' }
             children:
