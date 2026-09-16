@@ -1,0 +1,55 @@
+{
+  "description": "Recorded sink requests and harness events for the harness self-test. Replayed at a live sink receiver over real HTTP by `python -m harness.run --dry`, so the receiver's own parsing is exercised rather than bypassed. The ntfy bodies follow SPEC.md \"Alert shape (normative)\": provenance rides on a line of `message` beginning `riemann-go: `, because the ntfy server discards top-level fields it does not recognize. The write bodies are InfluxDB v2 line protocol.",
+  "requests": [
+    {
+      "path": "/api/v2/write?org=arena&bucket=arena&precision=s",
+      "headers": {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Authorization": "Token arena-token"
+      },
+      "body": "agent.tokens.out,host=ghost,service=agent.tokens.out,state=ok metric=1234 1757900000\nagent.cost,host=ghost,service=agent.cost,state=warning metric=7.5 1757900001\n"
+    },
+    {
+      "path": "/",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "{\"topic\":\"arena\",\"title\":\"ghost agent.cost warning\",\"message\":\"ghost agent.cost is warning (7.5)\\nriemann-go: {\\\"rule\\\":\\\"atlas-cost\\\",\\\"version\\\":3,\\\"owner\\\":\\\"atlas\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"agent.cost\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":7.5,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"splitp/1/set/transition/changed-state\\\"}\",\"priority\":4,\"tags\":[\"warning\",\"rule:atlas-cost\",\"owner:atlas\"]}"
+    },
+    {
+      "path": "/",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.up expired\",\"message\":\"ghost ntfy.listen.up is expired ()\\nriemann-go: {\\\"rule\\\":\\\"listener-up\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.up\\\",\\\"state\\\":\\\"expired\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"changed-state\\\"}\",\"priority\":3,\"tags\":[\"hourglass\",\"rule:listener-up\",\"owner:ops\"]}"
+    }
+  ],
+  "harness_events": [
+    {
+      "ts": 0.0,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 2,
+      "rejected": null
+    },
+    {
+      "ts": 0.002,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "atlas-cost",
+      "status": 200,
+      "version": 3
+    },
+    {
+      "ts": 0.02,
+      "source": "harness",
+      "event": "query_response",
+      "kind": "index",
+      "q": "service == \"agent.cost\"",
+      "status": 200,
+      "match_count": 1
+    }
+  ]
+}

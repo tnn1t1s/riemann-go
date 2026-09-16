@@ -1,0 +1,89 @@
+name: provenance-on-alert
+description: >
+  Every ntfy post names the rule that produced it, that rule's version, its
+  owner, the prior state changed-state left, and the node path traversed, so
+  an alert consumer can act without opening the config. SPEC.md "Alert shape (normative)". The existing Clojure alert
+  format carries none of these, which is why this is a scenario and not an
+  assumption.
+
+  Presence, not value: the version is dynamic and the node path depends on the
+  tree, so field_exists is the right operator. The one value asserted is
+  `rule`, because a post that names the wrong rule is worse than one that
+  names none.
+
+settle_seconds: 6
+
+rules:
+  - id: atlas-cost
+    owner: atlas
+    version: 1
+    partition: host
+    match: 'tagged("agent-obs") && service == "agent.cost"'
+    stream:
+      op: splitp
+      test: "{} < metric"
+      branches:
+        - threshold: 20.0
+          child:
+            op: set
+            fields: { state: '"critical"' }
+            children:
+              - { sink: index }
+              - { ref: transition }
+        - threshold: 5.0
+          child:
+            op: set
+            fields: { state: '"warning"' }
+            children:
+              - { sink: index }
+              - { ref: transition }
+      otherwise:
+        op: set
+        fields: { state: '"ok"' }
+        children:
+          - { sink: index }
+          - { ref: transition }
+    bindings:
+      transition:
+        op: changed-state
+        initial: ok
+        children:
+          - { sink: ntfy }
+
+stimulus:
+  # Under the warning threshold: restated ok, no transition, no alert.
+  - at: 0s
+    emit:
+      events: [{ host: ghost, service: agent.cost, metric: 1.2, ttl: 300, tags: [agent-obs] }]
+  # Over 5.0: restated warning. ok -> warning is the transition that alerts.
+  - at: 1s
+    emit:
+      events: [{ host: ghost, service: agent.cost, metric: 7.5, ttl: 300, tags: [agent-obs] }]
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, host: ghost, service: agent.cost, state: warning, rule: atlas-cost }
+
+    not_contains:
+      - { event: ntfy_post, service: agent.cost, state: critical }
+
+    order:
+      - before: { event: rule_response, kind: put, id: atlas-cost }
+        after:  { event: ntfy_post, rule: atlas-cost }
+
+    count:
+      - match: { event: ntfy_post, rule: atlas-cost }
+        equals: 1
+
+    field_exists:
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: version
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: owner
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: prior_state
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: node
+      - match: { event: ntfy_post, rule: atlas-cost }
+        field: metric

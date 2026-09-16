@@ -1,0 +1,52 @@
+name: ingest-accepted
+description: >
+  One event posted to /events is admitted and reaches the InfluxDB sink
+  carrying its own identity. Asserts the ingest contract of SPEC.md "HTTP surface" and
+  backpressure" (202 with an accepted count) and the sink contract of
+  SPEC.md "Alert shape (normative)". This is the scenario that fails first if nothing works.
+
+settle_seconds: 5
+
+rules:
+  - id: archive-all
+    owner: arena
+    partition: host
+    match: "true"
+    stream: { sink: influx }
+
+stimulus:
+  - at: 0s
+    emit:
+      events:
+        - host: ghost
+          service: agent.tokens.out
+          state: ok
+          metric: 1234
+          ttl: 300
+          tags: [agent-obs]
+
+expect:
+  trace:
+    contains:
+      - { event: ingest_response, status: 202, accepted: 1 }
+      - { event: influx_write, host: ghost, service: agent.tokens.out, metric: 1234.0 }
+
+    not_contains:
+      - { event: ingest_response, status: 429 }
+      - { event: ingest_response, status: 400 }
+
+    order:
+      # A rule must be registered before it can route an event to a sink. The
+      # 202 is deliberately not the `before` here: SPEC.md says the server
+      # makes no promise that an accepted event reached any sink, so ordering
+      # the reply against the write would assert a race rather than a property.
+      - before: { event: rule_response, kind: put, id: archive-all }
+        after:  { event: influx_write, host: ghost }
+
+    count:
+      - match: { event: influx_write, service: agent.tokens.out }
+        min: 1
+
+    field_exists:
+      - match: { event: influx_write, service: agent.tokens.out }
+        field: bucket

@@ -1,0 +1,56 @@
+name: expiry-becomes-event
+description: >
+  An index entry whose time + ttl has passed produces an event with host and
+  service kept and state `expired`, delivered to rules like any other event.
+  SPEC.md property 4, carried from src/riemann/core.clj:274-308.
+
+  This is the scenario that makes the index observable through the oracle at
+  all. Nothing else in the corpus proves the index exists: without expiry, an
+  index that dropped every entry on insert would still pass every other
+  scenario here.
+
+settle_seconds: 8
+
+rules:
+  - id: listener-up
+    owner: ops
+    partition: host
+    match: 'service == "ntfy.listen.up"'
+    stream:
+      op: changed-state
+      initial: ok
+      children:
+        - { sink: ntfy }
+
+stimulus:
+  # One beat with a 2 s ttl, then silence. The entry expires during settle.
+  - at: 0s
+    emit:
+      events:
+        - host: ghost
+          service: ntfy.listen.up
+          state: ok
+          metric: 1
+          ttl: 2
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, host: ghost, service: ntfy.listen.up, state: expired }
+
+    not_contains:
+      # The initial `ok` is not a transition away from changed-state's initial
+      # value, so it must not alert. Only the expiry does.
+      - { event: ntfy_post, host: ghost, service: ntfy.listen.up, state: ok }
+
+    order:
+      - before: { event: ingest_response, status: 202 }
+        after:  { event: ntfy_post, state: expired }
+
+    count:
+      - match: { event: ntfy_post, service: ntfy.listen.up }
+        equals: 1
+
+    field_exists:
+      - match: { event: ntfy_post, state: expired }
+        field: prior_state

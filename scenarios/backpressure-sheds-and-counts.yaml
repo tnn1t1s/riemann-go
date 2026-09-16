@@ -1,0 +1,97 @@
+name: backpressure-sheds-and-counts
+description: >
+  A slow sink alone never produces a 429, because the shard loop never blocks
+  on a sink. It sheds at the sink queue, counts every drop, and the accounting
+  identity stays exact. INVARIANTS.md I3, I4 and the accounting identity in SCALE.md, and the observation in
+  SCALE.md: with a sink sleeping 50 ms per event, ten
+  thousand events got a hundred replies of 202 and the sink dropped 8,998 of
+  them.
+
+  The harness makes the ntfy sink slow before the flood. That control is an
+  in-process method call on the sink receiver, not an HTTP endpoint, so the
+  code under test cannot reach it.
+
+config:
+  sink.ntfy.queue_capacity: 32
+  self.interval: 1
+
+rules:
+  - id: alert-all
+    owner: arena
+    partition: host
+    match: 'service == "flood.event"'
+    stream: { sink: ntfy }
+
+  # Self-observation is an ordinary event stream, so the drop counter is an
+  # ordinary rule. The threshold lives in the rule, which is why the matcher
+  # needs no comparison operator to assert "drops happened".
+  - id: shed-detector
+    owner: arena
+    partition: host
+    match: 'service == "riemann.sink.ntfy.dropped" && metric > 0'
+    stream:
+      op: changed-state
+      initial: ok
+      children:
+        - { sink: ntfy }
+
+  # The accounting identity, asserted by its absence. `riemann.accounting.residual`
+  # is the self-observation field this property needs and SPEC.md must pin: it
+  # is accepted - (processed + dropped + queued + in_flight), and SPEC.md
+  # invariant 6 says it is exactly zero. If SPEC.md names it differently, this
+  # rule's match string changes and nothing else does.
+  - id: accounting-violation
+    owner: arena
+    partition: host
+    match: 'service == "riemann.accounting.residual" && metric != 0'
+    stream: { sink: ntfy }
+
+settle_seconds: 10
+
+stimulus:
+  # 100 ms per ntfy post. The queue holds 32; the flood is 2000.
+  - at: 0s
+    sink_delay: { sink: ntfy, seconds: 0.1 }
+
+  - at: 0.5s
+    emit_n:
+      count: 2000
+      batch_size: 100
+      interval: 0.05s
+      template:
+        host: "host-{i}"
+        service: flood.event
+        state: ok
+        metric: 1
+        ttl: 300
+
+expect:
+  trace:
+    contains:
+      # Drops were counted and surfaced as events, not lost silently.
+      - { event: ntfy_post, rule: shed-detector }
+
+    not_contains:
+      # A slow sink does not saturate the loop, so no emitter sees a 429.
+      - { event: ingest_response, status: 429 }
+      # The accounting identity held. This alert firing means it did not.
+      - { event: ntfy_post, rule: accounting-violation }
+
+    order:
+      - before: { event: ingest_response, status: 202 }
+        after:  { event: ntfy_post, rule: shed-detector }
+
+    count:
+      # Every batch was admitted: twenty batches of a hundred.
+      - match: { event: ingest_response, status: 202 }
+        equals: 20
+      # The sink shed. Two thousand events in, far fewer posts out: the run is
+      # about eleven seconds and the oracle takes 100 ms per post, so the
+      # receiver cannot have seen more than about 110 of them.
+      - match: { event: ntfy_post, rule: alert-all }
+        min: 1
+        max: 150
+
+    field_exists:
+      - match: { event: ntfy_post, rule: shed-detector }
+        field: metric

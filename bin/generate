@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Generate a riemann-go implementation from the spec using claude -p.
+#
+# Usage:
+#   bin/generate [target_dir]
+#   bin/generate --help
+#
+#   target_dir defaults to scratch/gen-<timestamp>
+#
+# The spec is the only input. There is no feedback side-channel: no FEEDBACK.md,
+# no "last time you got X wrong" note, no prior generation on disk for the
+# generator to read. When a generation has a defect the fix lands in SPEC.md, in
+# INVARIANTS.md, or in a new scenario, and the next generation is produced from
+# the updated spec.
+#
+# Why: cue ran ten iterations of one generation with an out-of-band feedback
+# channel. Every fix carried outside the spec regressed at the next regeneration;
+# every fix pinned in the spec held. A side-channel makes the artifact depend on
+# conversation history, and conversation history is not a build input.
+
+set -euo pipefail
+
+usage() {
+  sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  usage
+  exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
+PROMPT_TEMPLATE="$REPO_DIR/bin/prompt.md"
+
+# Everything the prompt tells the generator to read must exist before we spend a
+# generation. A missing spec document is a stop, not a default: generating
+# against a partial reading order produces an artifact nobody can attribute.
+REQUIRED=(
+  "$REPO_DIR/SPEC.md"
+  "$REPO_DIR/SCALE.md"
+  "$REPO_DIR/INVARIANTS.md"
+  "$REPO_DIR/HARNESS.md"
+  "$REPO_DIR/knowledge/INDEX.md"
+  "$PROMPT_TEMPLATE"
+)
+
+missing=0
+for f in "${REQUIRED[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "bin/generate: missing required input: $f" >&2
+    missing=1
+  fi
+done
+if [ "$missing" -ne 0 ]; then
+  echo "bin/generate: the generator's reading order is fixed in bin/prompt.md." >&2
+  echo "Write the missing document, or remove it from the reading order there." >&2
+  exit 2
+fi
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "bin/generate: 'claude' not on PATH; the generator cannot run." >&2
+  exit 2
+fi
+
+TARGET="${1:-$REPO_DIR/scratch/gen-$(date +%Y%m%d-%H%M%S)}"
+mkdir -p "$TARGET"
+
+PROMPT="$(sed "s|__SPEC_PATH__|$REPO_DIR|g" "$PROMPT_TEMPLATE")"
+
+SPEC_SHA="$(cd "$REPO_DIR" && git rev-parse HEAD:SPEC.md 2>/dev/null || echo unknown)"
+PROMPT_SHA="$(printf '%s' "$PROMPT" | shasum -a 256 | cut -d' ' -f1)"
+
+echo "Generating riemann-go into: $TARGET"
+echo "Spec:                       $REPO_DIR/SPEC.md"
+echo "Spec SHA:                   $SPEC_SHA"
+echo "Prompt SHA:                 $PROMPT_SHA"
+echo
+
+cd "$TARGET"
+
+claude -p "$PROMPT" \
+  --permission-mode acceptEdits \
+  --allowedTools "Read,Write,Edit,Bash" \
+  --max-turns 60
+
+echo
+echo "Generated tree at: $TARGET"
+echo "Files:"
+find "$TARGET" -type f -name '*.go' | head -50
+echo
+echo "SPEC-GAP notes:"
+grep -rn "SPEC-GAP:" "$TARGET" || echo "  (none)"

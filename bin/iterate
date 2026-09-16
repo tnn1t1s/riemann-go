@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+# bin/iterate — run the riemann-go arena loop until every scenario is GREEN,
+# until the loop degrades, or until MAX_ITER.
+#
+# Usage:
+#   bin/iterate
+#   bin/iterate --help
+#
+# Each iteration:
+#   1. generate riemannd            (bin/generate, claude -p with bin/prompt.md)
+#   2. build it                     (go build)
+#   3. trial every scenario         (the harness; deterministic Python)
+#   4. read the scores              (reports/<scenario>-iter<n>.json)
+#   5. diagnose the first failure   (bin/diagnose, claude -p, separate context)
+#   6. print the diagnosis and go round again
+#
+# This script never edits SPEC.md. Deciding whether a failure is a spec gap, a
+# missing scenario, or a bad roll is the orchestrator's judgment, and iteration
+# N+1 re-reads SPEC.md from disk, so any edit landed between iterations is
+# picked up with no plumbing. The spec is the generator's only input.
+#
+# There is no cluster to bring up. The oracle is the harness's own sink
+# receiver, so a trial is seconds; the loop is cheap enough to run for real.
+#
+# Early stops:
+#   observer_error — the oracle misread. The generation is unjudged and
+#                    continuing would charge a harness bug to the generator.
+#   DEGRADED       — fewer scenarios passed than in the previous iteration.
+#                    The spec edits between iterations are making it worse.
+#
+# Environment variables and their defaults:
+#   MAX_ITER=3
+#   SCENARIOS=<every scenarios/*.yaml>
+#   PYTHON=.venv/bin/python
+
+set -euo pipefail
+
+usage() {
+  sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  usage
+  exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$REPO_DIR"
+
+MAX_ITER=${MAX_ITER:-3}
+PYTHON=${PYTHON:-$REPO_DIR/.venv/bin/python}
+
+if [ ! -x "$PYTHON" ]; then
+  echo "bin/iterate: python not found at $PYTHON." >&2
+  echo "Create the harness venv first, or set PYTHON to the interpreter that has it." >&2
+  exit 2
+fi
+
+if ! command -v go >/dev/null 2>&1; then
+  echo "bin/iterate: 'go' not on PATH; nothing can be built." >&2
+  exit 2
+fi
+
+if [ -z "${SCENARIOS:-}" ]; then
+  SCENARIOS=$(find "$REPO_DIR/scenarios" -name '*.yaml' -type f 2>/dev/null | sort | tr '\n' ' ' || true)
+fi
+if [ -z "${SCENARIOS// /}" ]; then
+  echo "bin/iterate: no scenarios found under $REPO_DIR/scenarios." >&2
+  echo "An arena with an empty corpus grades nothing. Write one scenario first." >&2
+  exit 2
+fi
+
+SCENARIO_COUNT=$(echo "$SCENARIOS" | wc -w | tr -d ' ')
+
+mkdir -p "$REPO_DIR/reports" "$REPO_DIR/traces" "$REPO_DIR/scratch"
+
+# Read one dotted field out of a report. Prints nothing and returns 1 when the
+# report is unreadable, so a caller can tell "missing" from "present and empty".
+read_score() {
+  local report=$1 field=$2
+  "$PYTHON" - "$report" "$field" <<'PY' 2>/dev/null
+import json, sys
+path, field = sys.argv[1], sys.argv[2]
+with open(path) as fh:
+    doc = json.load(fh)
+node = doc
+for part in field.split("."):
+    node = node[part]
+print(node)
+PY
+}
+
+PREV_PASSED=-1
+
+for iter in $(seq 1 "$MAX_ITER"); do
+  echo
+  echo "================================================================"
+  echo "ITERATION $iter / $MAX_ITER"
+  echo "================================================================"
+
+  echo
+  echo "[generate]"
+  GEN_LOG="$REPO_DIR/scratch/generate-iter${iter}.log"
+  if ! "$SCRIPT_DIR/generate" 2>&1 | tee "$GEN_LOG"; then
+    echo "bin/iterate: generation failed; see $GEN_LOG" >&2
+    exit 1
+  fi
+
+  GEN_DIR=$(grep -oE '^Generated tree at: .*' "$GEN_LOG" | tail -1 | sed 's/^Generated tree at: //')
+  if [ -z "$GEN_DIR" ] || [ ! -d "$GEN_DIR" ]; then
+    echo "bin/iterate: could not locate the generated tree from $GEN_LOG" >&2
+    exit 1
+  fi
+
+  BINARY="$GEN_DIR/riemannd"
+  if [ ! -x "$BINARY" ]; then
+    echo
+    echo "[build] $GEN_DIR"
+    if ! (cd "$GEN_DIR" && go build -o riemannd ./cmd/riemannd); then
+      echo
+      echo "compile_error at iteration $iter"
+      echo "Read the build errors above. Dependency and layout errors are usually"
+      echo "spec gaps; a type error inside one package is usually a bad roll."
+      PREV_PASSED=0
+      continue
+    fi
+  fi
+
+  PASSED=0
+  FIRST_FAILED_SCENARIO=""
+  FIRST_FAILED_REPORT=""
+  FIRST_FAILED_TRACE=""
+  FIRST_FAILED_LOG=""
+  OBSERVER_ERROR=""
+
+  for scenario in $SCENARIOS; do
+    name=$(basename "$scenario" .yaml)
+    report="$REPO_DIR/reports/${name}-iter${iter}.json"
+    trace="$REPO_DIR/traces/${name}-iter${iter}.jsonl"
+    log="$REPO_DIR/reports/${name}-iter${iter}.log"
+
+    echo
+    echo "[harness] $scenario"
+    "$PYTHON" -m harness.run \
+      --scenario "$scenario" \
+      --binary "$BINARY" \
+      --report-out "$report" \
+      --trace-out "$trace" \
+      --log-out "$log" || true
+
+    category=$(read_score "$report" score.category || true)
+    if [ -z "$category" ]; then
+      echo "bin/iterate: no readable score in $report" >&2
+      category="observer_error"
+    fi
+    echo "  score.category = $category"
+
+    if [ "$category" = "observer_error" ]; then
+      OBSERVER_ERROR="$scenario"
+      break
+    fi
+
+    if [ "$category" = "GREEN" ]; then
+      PASSED=$((PASSED + 1))
+    elif [ -z "$FIRST_FAILED_SCENARIO" ]; then
+      FIRST_FAILED_SCENARIO=$scenario
+      FIRST_FAILED_REPORT=$report
+      FIRST_FAILED_TRACE=$trace
+      FIRST_FAILED_LOG=$log
+    fi
+  done
+
+  if [ -n "$OBSERVER_ERROR" ]; then
+    echo
+    echo "================================================================"
+    echo "OBSERVER ERROR on $OBSERVER_ERROR at iteration $iter"
+    echo "The oracle misread. This generation is unjudged. Fix the harness"
+    echo "and re-run; do not charge this to the generator."
+    echo "================================================================"
+    exit 3
+  fi
+
+  echo
+  echo "passed $PASSED / $SCENARIO_COUNT"
+
+  if [ "$PASSED" -eq "$SCENARIO_COUNT" ]; then
+    echo
+    echo "================================================================"
+    echo "GREEN at iteration $iter"
+    echo "candidate ready to promote: $GEN_DIR"
+    echo "see GENERATE.md for the manifest and the releases/candidates layout"
+    echo "================================================================"
+    exit 0
+  fi
+
+  if [ "$PREV_PASSED" -ge 0 ] && [ "$PASSED" -lt "$PREV_PASSED" ]; then
+    echo
+    echo "================================================================"
+    echo "DEGRADED at iteration $iter: $PREV_PASSED passed, now $PASSED"
+    echo "The edits landed between iterations made it worse. Stop and read"
+    echo "them before generating again."
+    echo "================================================================"
+    exit 4
+  fi
+  PREV_PASSED=$PASSED
+
+  if [ -n "$FIRST_FAILED_SCENARIO" ]; then
+    echo
+    echo "[diagnose] $FIRST_FAILED_SCENARIO"
+    "$SCRIPT_DIR/diagnose" \
+      "$FIRST_FAILED_SCENARIO" \
+      "$FIRST_FAILED_REPORT" \
+      "$FIRST_FAILED_TRACE" \
+      "$FIRST_FAILED_LOG" || true
+  fi
+
+  if [ "$iter" -lt "$MAX_ITER" ]; then
+    echo
+    echo "Iteration $iter did not reach GREEN. Act on the diagnosis above:"
+    echo "edit SPEC.md, add a scenario, or accept the roll and continue."
+    echo "Iteration $((iter + 1)) re-reads SPEC.md from disk."
+  fi
+done
+
+echo
+echo "================================================================"
+echo "NEEDS-HUMAN after $MAX_ITER iterations"
+echo "A failure that survives three generations is a spec gap, not a bad roll."
+echo "================================================================"
+exit 2
