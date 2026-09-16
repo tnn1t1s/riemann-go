@@ -29,7 +29,7 @@ expect:
   trace:
     contains:
       - { event: ingest_response, status: 202, accepted: 1 }
-      - { event: influx_write, host: ghost, service: agent.tokens.out, metric: 1234.0 }
+      - { event: influx_write, host: ghost, measurement: agent.tokens.out, metric: 1234.0 }
 
     not_contains:
       - { event: ingest_response, status: 429 }
@@ -44,9 +44,9 @@ expect:
         after:  { event: influx_write, host: ghost }
 
     count:
-      - match: { event: influx_write, service: agent.tokens.out }
+      - match: { event: influx_write, measurement: agent.tokens.out }
         min: 1
 
     field_exists:
-      - match: { event: influx_write, service: agent.tokens.out }
+      - match: { event: influx_write, measurement: agent.tokens.out }
         field: bucket

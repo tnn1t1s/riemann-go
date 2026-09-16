@@ -57,7 +57,6 @@ class Adapter:
         # SPEC.md's implementation guidance requires of cmd/riemannd.
         argv = [
             self.binary,
-            "serve",
             "--listen", self.listen_addr,
             "--rules", self.rules_path,
             "--ntfy-url", self.ntfy_url,
@@ -89,6 +88,9 @@ class Adapter:
         if self._log_file:
             self._log_file.close()
             self._log_file = None
+
+    def _base(self) -> str:
+        return f"http://{self.listen_addr}"
 
     def ready(self) -> bool:
         # SPEC.md's HTTP surface pins `GET /healthz` returning 200 as the

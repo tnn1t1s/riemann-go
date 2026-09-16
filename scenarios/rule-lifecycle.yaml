@@ -41,8 +41,8 @@ stimulus:
 expect:
   trace:
     contains:
-      - { event: rule_response, kind: put, id: listener-connected, status: 200 }
-      - { event: rule_response, kind: delete, id: listener-connected, status: 200 }
+      - { event: rule_response, kind: put, id: listener-connected, status: 201 }
+      - { event: rule_response, kind: delete, id: listener-connected, status: 204 }
       - { event: ntfy_post, service: ntfy.listen.connected, state: warning }
 
     not_contains:
