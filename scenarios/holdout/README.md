@@ -18,7 +18,11 @@ That is the ordinary reason for a held-out set, and the ordinary rules apply.
 
 4. **A held-out failure is a finding, not a bug to patch.** It says the spec generalises worse than the development corpus suggested. Recording it is the point.
 
-5. **Looking at a held-out scenario burns it.** Once its failure has informed a spec edit, it moves permanently into `scenarios/` and a replacement is written here. A burned scenario never returns: it is now part of what the spec was fitted to.
+5. **A specification edit burns the scenario that prompted it.** The trigger is the edit, not the reading. Once a held-out failure has informed a change to `SPEC.md`, `SEMANTICS.md`, `SCALE.md` or `INVARIANTS.md`, that scenario moves permanently into `scenarios/` and a replacement is written here, because it is now part of what the spec was fitted to. A burned scenario never returns.
+
+   Diagnosing a failure is allowed and expected, including reading the generated tree to find the cause. Classifying a failure is the whole purpose of the set, and a failure nobody investigates teaches nothing. What matters is whether the diagnosis ends in a spec edit. A failure that turns out to be a bad roll against a specification that already says the right thing costs nothing: regenerate, and the scenario stays held out.
+
+   The residual risk after a diagnostic read is carried by the reader, not the file. Whoever has read part of an implementation should say so before writing further held-out scenarios that touch the same code path.
 
 6. **Replacements are written from the specification, not from the implementation.** A scenario derived by reading generated Go asserts what that generation happens to do, which is the failure this whole structure exists to avoid.
 
