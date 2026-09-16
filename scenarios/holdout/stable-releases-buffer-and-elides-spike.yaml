@@ -1,0 +1,102 @@
+name: stable-releases-buffer-and-elides-spike
+description: >
+  Source: upstream `stable-test`, the "ignores spikes" case in
+  riemann/test/riemann/streams_test.clj, translated to wall-clock windows.
+  Asserts SEMANTICS.md `stable` in full: the first event for a key is buffered
+  rather than passed, the buffer is released when the watched value has held
+  for `duration_seconds` and the releasing event is included in the release,
+  and a value change discards the buffer so the events in it never reach a
+  sink.
+
+  No scenario in the development corpus drives `stable` at all; HARNESS.md
+  names it as one that would use a 3 s window when written.
+
+  Every event carries a distinct `metric`, because the property is about which
+  events are emitted and which are destroyed, not how many. The two `warning`
+  events are the spike: they are buffered, then discarded when the value
+  returns to `ok`, and they must never appear at the oracle.
+
+  Expected wall clock: about 9.4 s of stimulus plus a 4 s settle, so a little
+  under 14 s.
+
+settle_seconds: 4
+
+rules:
+  - id: stall-detector
+    owner: arena
+    partition: host
+    match: 'service == "stable.probe"'
+    stream:
+      op: by
+      fields: [host, service]
+      children:
+        - op: stable
+          duration_seconds: 3
+          field: state
+          children:
+            - { sink: ntfy }
+
+stimulus:
+  # Buffered: the first event for a key is never passed immediately.
+  - at: 0.0s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: ok, metric: 1, ttl: 300 }]
+  - at: 0.8s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: ok, metric: 2, ttl: 300 }]
+  # 3.4 s after the head of the buffer, so the buffer releases, including this
+  # event. The 0.4 s over the window is slack for wall-clock jitter; the
+  # scenario does not test the inclusive boundary, which a real clock cannot
+  # resolve.
+  - at: 3.4s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: ok, metric: 3, ttl: 300 }]
+
+  # The spike. Value changed, so a new buffer starts.
+  - at: 4.2s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: warning, metric: 4, ttl: 300 }]
+  - at: 5.0s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: warning, metric: 5, ttl: 300 }]
+  # Value changed back before the spike could stabilise. Metrics 4 and 5 are
+  # discarded here and can never be emitted afterwards.
+  - at: 6.0s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: ok, metric: 6, ttl: 300 }]
+  # 3.4 s after metric 6, so the second buffer releases.
+  - at: 9.4s
+    emit:
+      events: [{ host: ghost, service: stable.probe, state: ok, metric: 7, ttl: 300 }]
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, metric: 1 }
+      - { event: ntfy_post, metric: 2 }
+      # The releasing event is part of the release.
+      - { event: ntfy_post, metric: 3 }
+      - { event: ntfy_post, metric: 6 }
+      - { event: ntfy_post, metric: 7 }
+
+    not_contains:
+      # The spike. An implementation that buffers but never discards emits
+      # these on the next release; one that does not buffer at all emits them
+      # immediately.
+      - { event: ntfy_post, state: warning }
+
+    order:
+      # The two releases happened in order, six seconds apart.
+      - before: { event: ntfy_post, metric: 3 }
+        after:  { event: ntfy_post, metric: 6 }
+
+    count:
+      # Seven events in, five out. An implementation that passes events through
+      # unbuffered gives seven; one that drops rather than buffers gives two or
+      # three; one that never releases gives none.
+      - match: { event: ntfy_post, service: stable.probe }
+        equals: 5
+
+    field_exists:
+      - match: { event: ntfy_post, service: stable.probe }
+        field: node

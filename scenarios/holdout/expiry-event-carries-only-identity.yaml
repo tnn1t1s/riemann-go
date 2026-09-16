@@ -1,0 +1,95 @@
+name: expiry-event-carries-only-identity
+description: >
+  Source: SEMANTICS.md "Expiry", "The shape of the synthesized event", which
+  states the consequence without a worked example: the synthesized event copies
+  only `host` and `service`, so its `metric`, `tags` and `attributes` are the
+  event model's defaults and a rule matching a tag together with the expired
+  state never fires. Asserts SPEC.md property 4 and that sentence.
+
+  The development corpus's `expiry-becomes-event` asserts only that an expiry
+  alert arrives. That passes against an implementation that synthesizes the
+  expiry event by copying the whole expiring entry and overwriting `state`,
+  which is the obvious implementation and the wrong one. Two rules separate
+  them: one matches the expired state alone and must fire, the other matches
+  the expired state together with a tag the expiring entry carried and must
+  never fire.
+
+  `archive-probe` exists because SEMANTICS.md "Indexing" says there is no
+  implicit indexing: an entry reaches the index only through a
+  `{"sink":"index"}` leaf. The scenario routes the event there explicitly so
+  that it does not depend on whether a generation indexes at ingest.
+
+  Expected wall clock: no stimulus after t=0, a 2 s ttl, and a 9 s settle.
+
+settle_seconds: 9
+
+rules:
+  # Puts the entry in the index so that it has something to expire from.
+  - id: archive-probe
+    owner: arena
+    partition: host
+    match: 'service == "agent.tokens.out"'
+    stream: { sink: index }
+
+  # Must fire. The expiry event carries host and service, so this matches.
+  - id: expiry-any
+    owner: arena
+    partition: host
+    match: 'service == "agent.tokens.out" && state == "expired"'
+    stream: { sink: ntfy }
+
+  # Must never fire. The expiring entry carried the tag; the synthesized event
+  # does not. This rule firing means the implementation copied fields the
+  # specification says it drops.
+  - id: expiry-tagged
+    owner: arena
+    partition: host
+    match: 'tagged("agent-obs") && state == "expired"'
+    stream: { sink: ntfy }
+
+stimulus:
+  # One beat with a 2 s ttl, carrying a metric, a tag and an attribute, then
+  # silence. The entry expires during the settle window.
+  - at: 0s
+    emit:
+      events:
+        - host: ghost
+          service: agent.tokens.out
+          state: ok
+          metric: 1234
+          ttl: 2
+          tags: [agent-obs]
+          attributes: { run_id: r-42 }
+
+expect:
+  trace:
+    contains:
+      # Identity survives, metric does not. `metric: null` is the spec's own
+      # statement in the alert shape: null when the event carries none.
+      - { event: ntfy_post, rule: expiry-any, host: ghost, service: agent.tokens.out, state: expired, metric: null }
+
+    not_contains:
+      # The tag did not survive, so this rule has nothing to match.
+      - { event: ntfy_post, rule: expiry-tagged }
+      # The metric did not survive either. Catches a copy-the-entry expiry
+      # even if the tag happened to be dropped.
+      - { event: ntfy_post, metric: 1234 }
+      # The live event itself never reaches ntfy: no rule routes it there.
+      - { event: ntfy_post, state: ok }
+
+    order:
+      - before: { event: ingest_response, status: 202 }
+        after:  { event: ntfy_post, rule: expiry-any }
+
+    count:
+      # Exactly one expiry, delivered exactly once. An implementation that
+      # re-dispatches the synthesized event through the index leaf and expires
+      # it again would show more.
+      - match: { event: ntfy_post, rule: expiry-any }
+        equals: 1
+      - match: { event: ntfy_post }
+        equals: 1
+
+    field_exists:
+      - match: { event: ntfy_post, rule: expiry-any }
+        field: node

@@ -1,0 +1,88 @@
+name: ddt-skips-the-metricless-event
+description: >
+  Source: upstream `ddt-immediate-test` in riemann/test/riemann/streams_test.clj
+  ("ignore stream without metrics", "do nothing the first time"), and
+  SEMANTICS.md `ddt`, first and third edge cases. Asserts that an event with no
+  `metric` is ignored entirely, producing no output and not becoming the
+  previous event, so the next event carrying a metric differentiates across the
+  gap; and that the first event for a fork key produces nothing.
+
+  The series is deliberately flat: two readings of 10 with a metric-less event
+  between them. A flat series has a rate of exactly zero whatever the elapsed
+  time is, which is what makes this assertable on a real clock at all. The
+  scenario does not need to know how many milliseconds passed, only that the
+  numerator is zero.
+
+  The two `where` nodes under the `ddt` split zero from non-zero and each
+  rewrites the service, so the outcome is a service name at the oracle rather
+  than a float comparison in the matcher.
+
+  Expected wall clock: about 2 s of stimulus plus a 5 s settle.
+
+settle_seconds: 5
+
+rules:
+  - id: rate-of-change
+    owner: arena
+    partition: host
+    match: 'service == "ddt.probe"'
+    stream:
+      op: by
+      fields: [host, service]
+      children:
+        - op: ddt
+          children:
+            - op: where
+              expr: "metric == 0"
+              children:
+                - op: set
+                  fields: { service: '"ddt.zero"' }
+                  children:
+                    - { sink: ntfy }
+            - op: where
+              expr: "metric != 0"
+              children:
+                - op: set
+                  fields: { service: '"ddt.nonzero"' }
+                  children:
+                    - { sink: ntfy }
+
+stimulus:
+  # First event for the key. Nothing to differentiate against, so no output.
+  - at: 0.0s
+    emit:
+      events: [{ host: ghost, service: ddt.probe, state: ok, metric: 10, ttl: 300 }]
+  # No `metric` key at all. Ignored entirely, and must not become the previous
+  # event. An implementation reading an absent metric as zero emits a large
+  # negative rate here and a large positive one at the next event.
+  - at: 1.0s
+    emit:
+      events: [{ host: ghost, service: ddt.probe, state: ok, ttl: 300 }]
+  # Differentiates against the t=0 reading of 10, across the gap. Same value,
+  # so the rate is exactly zero however long the gap was.
+  - at: 2.0s
+    emit:
+      events: [{ host: ghost, service: ddt.probe, state: ok, metric: 10, ttl: 300 }]
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, host: ghost, service: ddt.zero, rule: rate-of-change }
+
+    not_contains:
+      # Catches both the absent-metric-reads-as-zero implementation and an
+      # implementation that emits a rate for the first event of a key.
+      - { event: ntfy_post, service: ddt.nonzero }
+
+    order:
+      - before: { event: rule_response, kind: put, id: rate-of-change }
+        after:  { event: ntfy_post, service: ddt.zero }
+
+    count:
+      # Three events in, exactly one rate out.
+      - match: { event: ntfy_post, rule: rate-of-change }
+        equals: 1
+
+    field_exists:
+      - match: { event: ntfy_post, service: ddt.zero }
+        field: node
