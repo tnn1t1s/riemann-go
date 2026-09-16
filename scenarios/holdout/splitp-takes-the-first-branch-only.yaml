@@ -13,15 +13,11 @@ description: >
   with thresholds 10 and 5 is upstream's `splitp <=` reversed, which is the
   same predicate.
 
-  One shape here is not pinned anywhere. SPEC.md's combinator table says a
-  `splitp` branch entry carries "a `threshold` and a subtree" without naming
-  the key that holds the subtree, and SEMANTICS.md repeats the phrase. This
-  scenario spells it `child`, which is the spelling `provenance-on-alert` in
-  the development corpus uses, that being the only other statement of the
-  shape in the repository. A generation that reads the branch entry itself as
-  the node, with `threshold` alongside `op`, would reject every rule here at
-  `PUT` and the scenario would fail without saying anything about `splitp`.
-  That is a gap in SPEC.md rather than a property of this scenario.
+  A branch entry is an object with exactly two keys, `threshold` and `stream`,
+  and `otherwise` holds a subtree directly, per SPEC.md's combinator table.
+  The `stream` key contributes no segment of its own to the node path, so the
+  sink inside the first branch is entry 0 of that branch's `set` node children
+  and its path is `stream/branches/0/0`.
 
   Dropped from the port: the "Without a default" halves. Upstream's `splitp`
   throws and its `split*` silently drops in exactly the same situation, and
@@ -57,13 +53,13 @@ rules:
       test: "metric >= {}"
       branches:
         - threshold: 10
-          child:
+          stream:
             op: set
             fields: { state: '"critical"' }
             children:
               - { sink: ntfy }
         - threshold: 5
-          child:
+          stream:
             op: set
             fields: { state: '"warning"' }
             children:

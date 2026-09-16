@@ -26,10 +26,8 @@ description: >
   gives four. The correct implementation gives three, and the three are
   identifiable individually rather than only countable.
 
-  The branch entry is spelled `threshold` plus `child`, for the reason
-  `splitp-takes-the-first-branch-only` in this directory states: SPEC.md names
-  the threshold and calls the rest "a subtree" without giving it a key, and
-  `child` is the spelling the development corpus uses.
+  The branch entry is spelled `threshold` plus `stream`, per SPEC.md's
+  combinator table, and `otherwise` holds its subtree directly.
 
   This is not the fork-key property. There is no `by` here, and SEMANTICS.md
   `splitp` is explicit that branch independence is structural rather than
@@ -62,7 +60,7 @@ rules:
       test: "metric >= {}"
       branches:
         - threshold: 10
-          child:
+          stream:
             op: changed-state
             initial: ok
             children:
