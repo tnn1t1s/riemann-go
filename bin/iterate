@@ -63,7 +63,10 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 if [ -z "${SCENARIOS:-}" ]; then
-  SCENARIOS=$(find "$REPO_DIR/scenarios" -name '*.yaml' -type f 2>/dev/null | sort | tr '\n' ' ' || true)
+  # Depth 1 on purpose. scenarios/fixtures/ holds the harness self-test, and
+  # scenarios/holdout/ holds the set that must not influence a spec edit; see
+  # scenarios/holdout/README.md. Neither belongs in a development iteration.
+  SCENARIOS=$(find "$REPO_DIR/scenarios" -maxdepth 1 -name '*.yaml' -type f 2>/dev/null | sort | tr '\n' ' ' || true)
 fi
 if [ -z "${SCENARIOS// /}" ]; then
   echo "bin/iterate: no scenarios found under $REPO_DIR/scenarios." >&2

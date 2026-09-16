@@ -116,6 +116,16 @@ The implementation under `releases/candidates/<gen-id>/src/` is a build output. 
 - Style preferences such as naming conventions, which belong in the generator's brief if they matter at all.
 - Anything that might reasonably change as the spec evolves. If a principle is true for v0 but might not be for v1, it is not an invariant.
 
+### I13. The grading criteria are never an input to the thing being graded
+
+The generator reads `SPEC.md`, `SEMANTICS.md`, `SCALE.md`, `INVARIANTS.md` and `knowledge/INDEX.md`. It does not read `HARNESS.md`, the scenarios, the matcher or any report. A held-out scenario is additionally withheld from the spec-editing loop: its assertions, its failures and its traces play no part in deciding what a specification document says.
+
+**Why.** In this repository the artifact that overfits is the specification. Every failure in `scenarios/` drives a spec edit, so the development corpus is both the loss function and the score. Green across it establishes that the spec was edited until those cases passed, and nothing about a case nobody wrote. The held-out set is the only measurement of whether the spec generalises, and showing the generator which behaviors are checked destroys the same property from the other end.
+
+Looking at a held-out scenario consumes it. Once its failure has informed a spec edit it moves permanently into `scenarios/` and a replacement is written, because it is now part of what the spec was fitted to.
+
+**Acid test.** Grep the generator's reading order in `bin/prompt.md` and the required list in `bin/generate` for `HARNESS`, `scenarios` or `holdout`. Any hit is a violation. Then check that `bin/iterate` discovers scenarios at depth 1, so neither `scenarios/fixtures/` nor `scenarios/holdout/` enters a development iteration. Then check that every file in `scenarios/holdout/` is absent from `HARNESS.md`.
+
 ## Audit checklist for a candidate generation
 
 Before promoting `releases/candidates/<gen-id>/` to `releases/validated/`:
@@ -132,3 +142,4 @@ Before promoting `releases/candidates/<gen-id>/` to `releases/validated/`:
 - [ ] I10: All seventeen `SPEC.md` properties map to at least one scenario.
 - [ ] I11: The dry-run scenario's two runs are identical and the trace holds no sink event from either.
 - [ ] I12: `git log -- releases/<tag>/src/` shows no substantive edits since the generation commit.
+- [ ] I13: The generator's reading order names no harness file, no scenario and no held-out scenario; `bin/iterate` globs at depth 1; the held-out set ran at promotion and its reports are kept beside the development ones.

@@ -2,24 +2,22 @@
 
 Pointers only. No summaries live here, because a summary is a second copy of a fact that goes stale without anyone noticing. Open the files.
 
-This index exists for one reason: riemann-go keeps the semantics of an implementation that already exists and has a decade of edge cases in it. When `SPEC.md` is silent on how a combinator behaves at a boundary, the answer is usually one Read away rather than a guess.
+Combinator behavior is not here. It is in `SEMANTICS.md`, extracted once from the upstream Clojure and frozen, so that every generation reads the same words. What follows is the material behind that document plus the fleet contracts the spec depends on.
 
 Nothing here overrides the spec. Where this material and `SPEC.md` disagree, the spec wins, and the disagreement is worth a `// SPEC-GAP:` comment.
 
 ## Upstream Clojure implementation
 
-The semantics being kept, in the original.
+Provenance, not required reading. `SEMANTICS.md` was extracted from these files, reviewed and frozen, and it is where combinator behavior is stated for implementation purposes. Read the Clojure only when `SEMANTICS.md` records an open question against it, or when you believe `SEMANTICS.md` is wrong; in the second case the finding is a spec edit rather than something to work around.
 
-| Path | What to read it for |
+Re-reading these on every generation is what `SEMANTICS.md` exists to stop. Four thousand lines interpreted afresh each time is an unpinned input, and two generations from the same spec can disagree because they read it differently.
+
+| Path | What it is |
 | --- | --- |
-| `~/Developer/riemann/src/riemann/streams.clj` | Every combinator: `changed-state`, `stable`, `coalesce`, `throttle`, `rollup`, `batch`, `ddt`, `rate`, `ewma`, `by`, `splitp`, `project`, `top`. The edge cases are in the bodies, not the docstrings. |
-| `~/Developer/riemann/src/riemann/core.clj` | The index reaper and the shape of an expiry event. |
-| `~/Developer/riemann/src/riemann/index.clj` | Index keying and lookup. |
-| `~/Developer/riemann/src/riemann/common.clj` | Event field defaults, especially how a missing `time` is filled. |
-| `~/Developer/riemann/test/riemann/streams_test.clj` | The behavior of each combinator stated as timed input and expected output. The clearest statement of intent in the whole tree. |
-| `~/Developer/riemann/test/riemann/query_test.clj` | The query predicates that the expr syntax has to cover. |
-
-Two cautions. Upstream's `by` never frees a fork, and riemann-go does; upstream's `stable` schedules racing tasks, and riemann-go uses one generation-numbered heap entry. `SPEC.md` states both departures, and where it does, the spec is right and the Clojure is context.
+| `~/Developer/riemann/src/riemann/streams.clj` | The combinators, in the original. |
+| `~/Developer/riemann/src/riemann/index.clj`, `core.clj` | Indexing, the reaper, and the shape of an expiry event. |
+| `~/Developer/riemann/test/riemann/streams_test.clj` | Behavior as timed input and expected output, under a controlled clock. |
+| `~/Developer/riemann/test/riemann/query_test.clj` | The predicate forms the expression syntax has to cover. |
 
 ## The fleet this runs for
 

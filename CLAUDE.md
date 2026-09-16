@@ -5,6 +5,7 @@ You are the controller for an experiment that generates `riemannd` from `SPEC.md
 Read once at the start of a session:
 
 - `SPEC.md` — what riemannd must do.
+- `SEMANTICS.md` — how each combinator, and indexing and expiry, behave.
 - `INVARIANTS.md` — the properties that hold across every generation.
 - `SCALE.md` — bounded queues, partitioning, cardinality.
 - `HARNESS.md` — the matcher operators and how a scenario binds to a trace.
@@ -75,6 +76,18 @@ The categories between `compile_error` and `sink_error` are spec gaps until prov
 The upstream Clojure suite at `~/Developer/riemann/test/riemann/streams_test.clj` is a standing source of scenarios. Its combinator tests are the accumulated edge cases of a decade of production use, and riemann-go keeps those semantics, so each one translates into timed events in and expected sink output out.
 
 "Port another combinator test as a scenario" is always an available move. Reach for it whenever a diagnosis says the evidence does not discriminate, whenever a property has been argued about twice without a check existing for it, and whenever the corpus is green but you do not believe it. `changed-state`, `stable`, `coalesce`, `throttle`, `rollup`, `batch`, both `ddt` forms, `rate` and `ewma` are the ones whose semantics are least obvious and therefore most worth having in the corpus. `exception-stream`, `execute-on`, `pipe`, `by-builder` and `sdo` are Clojure surface and are not being kept, so do not port those.
+
+## The held-out set
+
+`scenarios/holdout/` runs at promotion and never during development. You do not read its assertions, its failures or its traces while deciding what a specification document should say. `scenarios/holdout/README.md` has the rules; the short version is that the thing which overfits here is the spec, so a corpus that drives every spec edit cannot also be the evidence that the spec generalises.
+
+Three consequences for you as orchestrator:
+
+Green across `scenarios/` is not validation. It says the spec was edited until the visible cases passed. Promotion to `releases/validated/` needs both sets green, with both sets of reports kept.
+
+A held-out failure is a finding about the spec's generality, and it is the most valuable output this repository produces. Record it. Acting on it costs the scenario: it moves into `scenarios/` permanently and you write a replacement, because once a failure has informed a spec edit that case is part of what the spec was fitted to.
+
+When you write a replacement, write it from `SPEC.md` and `SEMANTICS.md`, never by reading a generated tree. A scenario derived from an implementation asserts what that generation happens to do.
 
 ## User feedback triage
 
