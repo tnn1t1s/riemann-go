@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Run a binary against the development corpus, and optionally the held-out set.
+#
+# Usage:
+#   bin/trial <binary>              development corpus only
+#   bin/trial <binary> --holdout    both, as a promotion run
+#
+# The held-out set is deliberately not the default. It runs at promotion, and
+# its failures must not feed a spec edit; see scenarios/holdout/README.md.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+PYTHON="${PYTHON:-$REPO_DIR/.venv/bin/python}"
+
+if [ $# -lt 1 ]; then
+  echo "bin/trial: a binary path is required" >&2
+  exit 2
+fi
+BINARY="$1"; shift
+HOLDOUT=0
+[ "${1:-}" = "--holdout" ] && HOLDOUT=1
+
+if [ ! -x "$BINARY" ]; then
+  echo "bin/trial: not executable: $BINARY" >&2
+  exit 2
+fi
+if [ ! -x "$PYTHON" ]; then
+  echo "bin/trial: python not found at $PYTHON; create .venv first" >&2
+  exit 2
+fi
+
+run_set() {
+  local label="$1" pattern="$2" prefix="$3"
+  local total=0 green=0 start
+  start=$(date +%s)
+  echo "== $label"
+  for s in $pattern; do
+    local n cat
+    n="$(basename "$s" .yaml)"
+    "$PYTHON" -m harness.run --scenario "$s" --binary "$BINARY" \
+      --report-out "$REPO_DIR/reports/${prefix}${n}.json" \
+      --trace-out  "$REPO_DIR/traces/${prefix}${n}.jsonl" \
+      --log-out    "$REPO_DIR/reports/${prefix}${n}.log" >/dev/null 2>&1 || true
+    cat="$("$PYTHON" -c "
+import json,sys
+try: print(json.load(open('$REPO_DIR/reports/${prefix}${n}.json'))['score']['category'])
+except Exception: print('REPORT_UNREADABLE')" )"
+    printf '  %-46s %s\n' "$n" "$cat"
+    total=$((total+1))
+    [ "$cat" = "GREEN" ] && green=$((green+1))
+  done
+  echo "  -- $green/$total green in $(( $(date +%s) - start ))s"
+}
+
+run_set "development corpus" "$REPO_DIR/scenarios/*.yaml" ""
+if [ "$HOLDOUT" -eq 1 ]; then
+  echo
+  run_set "held-out set (promotion only)" "$REPO_DIR/scenarios/holdout/*.yaml" "holdout-"
+fi
