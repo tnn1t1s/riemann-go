@@ -1,3 +1,11 @@
+# BURNED from the held-out set on 2026-09-17, under scenarios/holdout/README.md
+# rule 5. Its failure against the first generation showed that SPEC.md property
+# 9 described no reproducible window at all, and the wording was rewritten to
+# the first-event-anchored tumbling window. The spec is now fitted to this case,
+# so it measures nothing about generalisation and belongs here.
+#
+# scenarios/holdout/throttle-window-anchors-on-the-first-event.yaml holds out the
+# same property, derived independently from upstream's part-time-simple-test.
 name: throttle-window-reopens-after-boundary
 description: >
   Source: upstream `throttle-test` in riemann/test/riemann/streams_test.clj,
