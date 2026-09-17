@@ -1,0 +1,95 @@
+name: by-gives-throttle-a-window-per-key
+description: >
+  Source: an interaction the development corpus covers nowhere. `by` is
+  exercised alone and `throttle` is exercised alone, and SEMANTICS.md `by`
+  ("Timing") states that a `throttle` under a `by` has one window per key.
+  Asserts SPEC.md property 7 applied to property 9.
+
+  Per-key throttle state is exactly the kind of thing one shared counter fakes
+  successfully in a scenario that only counts alerts. Here two hosts interleave
+  under a `throttle` of one per window, so the correct implementation emits the
+  first event of each host and a single shared counter emits only the first
+  event overall. The two outcomes differ in which alerts arrive, not only in
+  how many.
+
+  The window is 6 s and the stimulus is under 2 s, so no window closes while
+  events are arriving and every suppression in this scenario is the limit doing
+  its work rather than a boundary.
+
+  Expected wall clock: about 2 s of stimulus plus a 5 s settle.
+
+# One shard. With several shards a per-rule shared counter would be
+# instantiated once per shard, and two hosts landing on two shards would give
+# the right answer for the wrong reason.
+config:
+  engine.shards: 1
+
+settle_seconds: 5
+
+rules:
+  - id: per-host-bound
+    owner: arena
+    partition: host
+    match: 'service == "fork.probe"'
+    stream:
+      op: by
+      fields: [host]
+      children:
+        - op: throttle
+          limit: 1
+          window_seconds: 6
+          children:
+            - { sink: ntfy }
+
+stimulus:
+  # Interleaved, so a shared counter is exhausted by alpha before beta's first
+  # event ever arrives.
+  - at: 0.0s
+    emit:
+      events: [{ host: alpha, service: fork.probe, state: ok, metric: 1, ttl: 300 }]
+  - at: 0.3s
+    emit:
+      events: [{ host: beta, service: fork.probe, state: ok, metric: 2, ttl: 300 }]
+  - at: 0.8s
+    emit:
+      events: [{ host: alpha, service: fork.probe, state: ok, metric: 3, ttl: 300 }]
+  - at: 1.1s
+    emit:
+      events: [{ host: beta, service: fork.probe, state: ok, metric: 4, ttl: 300 }]
+  - at: 1.6s
+    emit:
+      events: [{ host: alpha, service: fork.probe, state: ok, metric: 5, ttl: 300 }]
+  - at: 1.9s
+    emit:
+      events: [{ host: beta, service: fork.probe, state: ok, metric: 6, ttl: 300 }]
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, host: alpha, metric: 1 }
+      # The assertion a single shared counter fails.
+      - { event: ntfy_post, host: beta, metric: 2 }
+
+    not_contains:
+      - { event: ntfy_post, metric: 3 }
+      - { event: ntfy_post, metric: 4 }
+      - { event: ntfy_post, metric: 5 }
+      - { event: ntfy_post, metric: 6 }
+
+    order:
+      - before: { event: ntfy_post, host: alpha, metric: 1 }
+        after:  { event: ntfy_post, host: beta, metric: 2 }
+
+    count:
+      # One per key, and the per-key counts are asserted separately so that a
+      # two-alert total arrived at by letting alpha through twice still fails.
+      - match: { event: ntfy_post, rule: per-host-bound }
+        equals: 2
+      - match: { event: ntfy_post, host: alpha }
+        equals: 1
+      - match: { event: ntfy_post, host: beta }
+        equals: 1
+
+    field_exists:
+      - match: { event: ntfy_post, rule: per-host-bound }
+        field: node

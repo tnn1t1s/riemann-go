@@ -1,12 +1,14 @@
 You are implementing a Go binary specified by these documents. Read them in this order:
 
-1. `__SPEC_PATH__/SPEC.md` — what riemannd must do (behavioral contract).
-2. `__SPEC_PATH__/SCALE.md` — the bounded-queue, partitioning and cardinality requirements that bind v1.
-3. `__SPEC_PATH__/INVARIANTS.md` — properties that hold across every generation regardless of which features the spec adds. Binding.
-4. `__SPEC_PATH__/HARNESS.md` — the validation contract the harness uses to grade your implementation. Read it to know what will be measured; do not read the harness itself.
-5. `__SPEC_PATH__/knowledge/INDEX.md` — a pointer index to material that already exists on disk: the upstream Clojure implementation whose combinator semantics are being kept, and the five design probes. It carries pointers and one line of orientation each, no summaries. Open it, then open what it points at. When the spec leaves a combinator's edge case open, the answer is usually one Read away in the Clojure source; do not fall back on training-data priors.
+1. `__SPEC_PATH__/SPEC.md` — what riemannd must do (behavioral contract), including the event schema, the normative CLI and HTTP surface, the rule document, the alert shape and the observability contract.
+2. `__SPEC_PATH__/SEMANTICS.md` — how each combinator behaves, and how indexing and expiry behave, stated once with parameters, state, timers, edge cases and worked examples. This replaces reading the upstream Clojure. It was extracted from that Clojure, reviewed, and frozen, so that every generation works from the same words instead of re-interpreting four thousand lines differently each time.
+3. `__SPEC_PATH__/SCALE.md` — the bounded-queue, partitioning and cardinality requirements.
+4. `__SPEC_PATH__/INVARIANTS.md` — properties that hold across every generation regardless of which features the spec adds. Binding.
+5. `__SPEC_PATH__/knowledge/INDEX.md` — pointers to material that exists on disk, with one line of orientation each and no summaries.
 
-They are mutually consistent. If you perceive a conflict, resolve in the order above: SPEC over SCALE over INVARIANTS over HARNESS over knowledge.
+You are graded by a validation harness. You do not read it, you do not read the scenarios it runs, and you are not told which behaviors it checks. Everything you are accountable for is in the documents above; the harness asserts against those and nothing else. Write to the specification, not to a test.
+
+They are mutually consistent. If you perceive a conflict, resolve in the order above: SPEC over SEMANTICS over SCALE over INVARIANTS over knowledge.
 
 ## Hard constraints
 

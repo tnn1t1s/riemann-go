@@ -39,9 +39,9 @@ PROMPT_TEMPLATE="$REPO_DIR/bin/prompt.md"
 # against a partial reading order produces an artifact nobody can attribute.
 REQUIRED=(
   "$REPO_DIR/SPEC.md"
+  "$REPO_DIR/SEMANTICS.md"
   "$REPO_DIR/SCALE.md"
   "$REPO_DIR/INVARIANTS.md"
-  "$REPO_DIR/HARNESS.md"
   "$REPO_DIR/knowledge/INDEX.md"
   "$PROMPT_TEMPLATE"
 )

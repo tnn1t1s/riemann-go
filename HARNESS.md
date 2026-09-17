@@ -138,7 +138,7 @@ The settle window is written into every report next to the actual wall clock, so
 
 ### Time-domain scenarios use short real windows
 
-A throttle window, a stable window and a TTL are counted on the wall clock in seconds, and a scenario settles within ten. `throttle-bounds-alerts` uses `window_seconds: 2` and `expiry-becomes-event` a 2-second TTL, while a stable scenario, when one is written, uses 3. There is no test clock, and scenarios do not backdate the `time` field on submitted events.
+A throttle window, a stable window and a TTL are counted on the wall clock in seconds, and a scenario settles within ten. `throttle-bounds-alerts` uses `window_seconds: 2` and `expiry-becomes-event` a 2-second TTL, while a stable scenario, when one is written, uses 3. There is no test clock. A scenario does not backdate the `time` field to advance a timer, because a timer runs on the wall clock and a stale timestamp will not move it. Setting `time` deliberately is allowed where the timestamp is itself the data under test, as in an expiry scenario, which needs a controlled `time + ttl`. The distinction is whether the field is being used as data or as a substitute for waiting.
 
 Two reasons, of which the first is the one that matters. A test-clock endpoint would be surface the spec does not have, and it would let a generation pass the whole corpus under a fake clock while its real timers were wrong, which is the failure the arena exists to catch. Backdating event timestamps substitutes for nothing, because timers fire on the wall clock in riemann-go as in upstream Clojure, so a future timestamp advances no throttle window.
 

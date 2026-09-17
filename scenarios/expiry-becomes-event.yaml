@@ -17,10 +17,18 @@ rules:
     partition: host
     match: 'service == "ntfy.listen.up"'
     stream:
-      op: changed-state
-      initial: ok
+      # The index leaf is what makes this identity expire at all. SPEC.md
+      # property 5 indexes only what a rule routes here, so without it the
+      # heartbeat would never enter the index and the TTL would never elapse.
+      # It sits before changed-state so the raw event is what gets stored.
+      op: where
+      expr: 'true'
       children:
-        - { sink: ntfy }
+        - { sink: index }
+        - op: changed-state
+          initial: ok
+          children:
+            - { sink: ntfy }
 
 stimulus:
   # One beat with a 2 s ttl, then silence. The entry expires during settle.

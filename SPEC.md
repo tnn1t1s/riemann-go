@@ -78,9 +78,9 @@ Each property is a MUST that a scenario asserts against the trace. A property wi
 
 3. **Validation fails fast.** A batch containing an event with no `host`, or no `service`, is rejected with `400`. A batch over `ingest.max_batch_events` or `ingest.max_batch_bytes` is rejected with `413`. Neither status admits any event from that batch.
 
-4. **Expiry is an event, not a deletion.** When `time + ttl` passes for an indexed entry, riemann-go produces an event carrying that entry's `host` and `service` with `state` equal to `expired`, and delivers it to rules exactly as an ingested event. A rule matching `state == "expired"` therefore fires at a sink with no further ingest.
+4. **Expiry is an event, not a deletion.** When `time + ttl` passes for an indexed entry, riemann-go produces an event carrying that entry's `host` and `service` with `state` equal to `expired`, and delivers it to rules exactly as an ingested event. A rule matching `state == "expired"` therefore fires at a sink with no further ingest. The synthesized event carries `ttl` 0 and no metric. Zero rather than the model default, because the event's whole content is that an identity stopped being live, and a sixty second lease would assert the opposite. It is synthesized rather than ingested, so the schema's absent-field default does not apply to it.
 
-5. **The index holds the last event per identity.** `GET /index/{host}/{service}` returns the most recently indexed event for that pair, or `404` when no entry exists or the entry has expired.
+5. **An event reaches the index only through an index leaf.** A rule whose tree routes an event to `{"sink":"index"}` inserts it, replacing any entry for that identity. There is no implicit indexing: an event that matches no rule, or that matches a rule whose tree has no index leaf, is never indexed and never expires. `GET /index/{host}/{service}` returns the most recently indexed event for that pair, or `404` when no entry exists or the entry has expired. The index is a product of rules, which is what keeps its cardinality something a rule author controls rather than a function of ingest volume.
 
 6. **Index query selects by expression.** `GET /index?q=<expr>` returns exactly the entries for which the compiled expression evaluates true, and carries `as_of` bounding the instants the slices were taken.
 
@@ -88,7 +88,7 @@ Each property is a MUST that a scenario asserts against the trace. A property wi
 
 8. **`changed-state` suppresses repeats.** Consecutive events carrying the same state, for one fork key, produce one firing. The state left by the previous event appears in the alert's provenance as `prior_state`.
 
-9. **`throttle` bounds firings.** At most `limit` events pass a `throttle` node per fork key in any `window_seconds` interval. Events beyond the limit are discarded, not deferred.
+9. **`throttle` bounds firings per window.** A window opens for a fork key when an event arrives for that key with no window open, and closes `window_seconds` later. At most `limit` events pass in one window; the rest are discarded, not deferred, and each discard counts as `riemann.rule.discarded`. The window is anchored on the first event for the key, not on a division of the wall clock, so the same stimulus produces the same firings whenever it is run. Anchoring on wall-clock bins makes the result depend on where a run falls against the grid, which no rule author can reason about and no scenario can assert.
 
 10. **`splitp` selects one branch.** An event takes the first branch whose `test` holds with that branch's `threshold` substituted, and takes `otherwise` when none holds. Exactly one branch receives the event, and the node path recorded in the provenance names it.
 
@@ -195,7 +195,7 @@ A `global` rule receives a copy of every event. A `host` or `host,service` rule 
 | `by` | `fields` | Forks state per distinct tuple of those event fields. Children below the fork hold independent state per key. |
 | `changed-state` | `initial` | Passes an event only when its `state` differs from the state the previous event left for this fork key. `initial` is the assumed prior state before any event. |
 | `throttle` | `limit`, `window_seconds` | Passes at most `limit` events per fork key per window. Excess is discarded. |
-| `splitp` | `test`, `branches`, `otherwise` | `test` is an expression containing `{}`, which each branch's `threshold` substitutes. The first branch whose test holds receives the event; `otherwise` receives it when none does. |
+| `splitp` | `test`, `branches`, `otherwise` | `test` is an expression containing `{}`, which each branch's `threshold` substitutes. Each entry of `branches` is an object with exactly two keys: `threshold`, the value substituted into `test`, and `stream`, the subtree that receives the event. `otherwise` holds a subtree directly and is required: a `splitp` without it is rejected at `PUT` with `400`, so no event can fall off the node silently. The first branch whose test holds receives the event; `otherwise` receives it when none does. |
 | `set` | `fields` | Each value is an expression evaluated against the incoming event. Produces a new event with those fields replaced. |
 | `coalesce` | none | Holds the latest event per identity and emits the current set as `events` to its children whenever one changes. |
 | `ddt` | none | Emits the rate of change of `metric` per second between consecutive events for a fork key. |
@@ -213,7 +213,7 @@ Sink leaves are `{"sink":"ntfy"}`, `{"sink":"influx"}` and `{"sink":"index"}`. A
 
 - The root of `stream` is `stream`; the root of a binding is `bindings/<name>`.
 - The k-th entry of a node's `children` array appends `/<k>`.
-- The k-th entry of a `splitp` node's `branches` appends `/branches/<k>`; `otherwise` appends `/otherwise`.
+- The k-th entry of a `splitp` node's `branches` appends `/branches/<k>`; `otherwise` appends `/otherwise`. The `stream` key inside a branch entry contributes no segment, so the node it holds sits at `.../branches/<k>` itself, and a sink in that node's `children` is `.../branches/<k>/0`. A node is never named by its `op`; every segment is an index or one of the two literals above.
 - A `{"ref":"name"}` leaf does not appear in the path. The nodes it splices in carry their binding-rooted path.
 
 So the ntfy leaf in the rule above has the path `stream/0/0/0`.
@@ -225,7 +225,9 @@ Expressions are expr-lang syntax, compiled once at `PUT` and evaluated per event
 - `tagged(name)` — true when `name` is in the event's `tags`.
 - `now` — the engine's current time in float seconds.
 - `expired` — true when the event was produced by index expiry rather than by ingest.
-- `events` — inside a `coalesce` subtree, the current set of events. Undefined elsewhere.
+- `events` — inside a `coalesce` subtree, the current set of events, as an array. `len(events)` gives its size and `map(events, .metric)` its metrics. Undefined elsewhere, where referencing it is a compile error at `PUT`.
+
+Below a `coalesce`, a child receives one event per emission, not the array. That event is the one whose arrival caused the emission, so it carries that identity's `host` and `service` unless a `set` node rewrites them, and the array reaches expressions through `events`. A rule that wants a fleet-wide identity says so with a `set`, as the fleet's burn rule does. Without this rule an alert originating below a `coalesce` would have no defined identity, and the sink shape requires one.
 
 The world is closed. An unknown top-level name is a compile error at `PUT`, which is a `400` rather than a rule that silently never fires.
 
@@ -266,7 +268,7 @@ Sink-receiver events, which are the oracle:
 | `event` | Carries |
 | --- | --- |
 | `ntfy_post` | `rule`, `version`, `owner`, `host`, `service`, `state`, `metric`, `prior_state`, `node`, `topic`, `priority`, `tags`, and `raw` holding the verbatim request |
-| `influx_write` | `measurement`, `tags`, `fields`, `timestamp`, and `raw` holding the verbatim request |
+| `influx_write` | `measurement`, `host`, `service`, `state`, `metric`, `time`, `org`, `bucket`, `precision`, and `raw` holding the verbatim request. `measurement` carries the event's service, per `## Alert shape`; the `service` field is read from a line-protocol tag and is therefore absent unless an implementation writes one. Assert on `measurement`. |
 
 Harness-emitted events, used only where the sink cannot see the property:
 
@@ -282,9 +284,11 @@ riemann-go's own counters reach the trace only through `GET /metrics` as a `quer
 
 ## Self-observation
 
-riemann-go emits its own queue depths, drop counts, loop lag, index size and per-node firing counts into its own index as ordinary events tagged `riemann`, so a rule can alert on `riemann.sink.ntfy.dropped > 0` with no new mechanism. The sampling interval is a parameter owned by the process, default 10 seconds with a `ttl` of twice that, carried from upstream's instrumentation rule (`src/riemann/core.clj:44-46`).
+riemann-go emits its own queue depths, drop counts, loop lag, index size and per-node firing counts as ordinary events tagged `riemann`, admitted through `POST /events` like any other, so a rule can alert on `riemann.sink.ntfy.dropped > 0` with no new mechanism. They reach the index the way everything else does, through a rule with an index leaf; the boot-time rule file `--rules` names is the natural place for one, and without it the gauges still flow to rules and sinks but are not queryable at `GET /index`. The sampling interval is a parameter owned by the process, default 10 seconds with a `ttl` of twice that, carried from upstream's instrumentation rule (`src/riemann/core.clj:44-46`).
 
 The service names are part of the contract, because a rule matches on them. Each bounded queue named in `SCALE.md` emits `riemann.<queue>.depth`, `riemann.<queue>.capacity` and `riemann.<queue>.dropped`. Each shard emits `riemann.shard.loop_lag`, `riemann.shard.index_entries` and `riemann.shard.in_flight`. Ingest emits `riemann.ingest.accepted` and `riemann.ingest.rejected`.
+
+Discards inside a rule need names too, because `INVARIANTS.md` I5 requires every discarded event to increment exactly one counter and a counter nothing can match on is not observable. A node that discards emits `riemann.rule.discarded` with the rule id, the rule version and the node path as attributes, and the metric carrying the count since the current version was installed. This covers a `throttle` beyond its limit, a `stable` buffer eviction and a `splitp` with no matching branch. `GET /rules/{id}` reports events each node passed downstream, which is a different number, and neither substitutes for the other.
 
 One more is required, and it is the only one that is a claim rather than a reading. `riemann.accounting.residual` carries `accepted - (processed + dropped + queued + in_flight)` summed across the process. `SCALE.md` states that identity; this event is how a scenario checks it without the harness learning what a shard is. A correct implementation emits zero at every sample, so a rule matching a non-zero residual is a rule that never fires, and a scenario asserts the absence.
 

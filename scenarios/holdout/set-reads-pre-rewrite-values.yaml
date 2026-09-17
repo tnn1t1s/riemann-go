@@ -1,0 +1,87 @@
+name: set-reads-pre-rewrite-values
+description: >
+  Source: SEMANTICS.md `set`, first and second edge cases, neither of which has
+  a worked example. Every field expression is evaluated against the incoming
+  event rather than against the partially rewritten one, so two fields that
+  reference each other both read the old values and the key order cannot change
+  the result. And the incoming event is not modified, so a sibling child of the
+  node above sees the original. Asserts SPEC.md property 11.
+
+  The rewrite is a swap: `service` takes the old `state` and `state` takes the
+  old `service`. A swap is the smallest expression pair that distinguishes the
+  correct fold-over-the-original from the obvious sequential implementation,
+  and it distinguishes both key orders of that sequential implementation from
+  each other as well.
+
+  The `set` node has a sibling ntfy leaf under the same `where`, so the same
+  event reaches the oracle twice: once rewritten and once not. An
+  implementation that rewrites in place loses the second one.
+
+  Expected wall clock: one event at t=0 plus a 5 s settle.
+
+settle_seconds: 5
+
+rules:
+  - id: swap-fields
+    owner: arena
+    partition: host
+    match: 'service == "swap.probe"'
+    stream:
+      op: where
+      expr: "true"
+      children:
+        # Child 0: rewritten.
+        - op: set
+          fields:
+            service: "state"
+            state: "service"
+          children:
+            - { sink: ntfy }
+        # Child 1: the same incoming event, untouched by child 0's rewrite.
+        - { sink: ntfy }
+
+stimulus:
+  - at: 0s
+    emit:
+      events:
+        - host: ghost
+          service: swap.probe
+          state: alpha
+          metric: 1
+          ttl: 300
+
+expect:
+  trace:
+    contains:
+      # Correct: both expressions read the pre-rewrite event.
+      - { event: ntfy_post, host: ghost, service: alpha, state: swap.probe, metric: 1 }
+      # The sibling, unaffected by the rewrite below its neighbour.
+      - { event: ntfy_post, host: ghost, service: swap.probe, state: alpha, metric: 1 }
+
+    not_contains:
+      # Sequential rewrite, `service` first: service becomes alpha, then state
+      # reads the already-rewritten service and also becomes alpha.
+      - { event: ntfy_post, service: alpha, state: alpha }
+      # Sequential rewrite, `state` first: state becomes swap.probe, then
+      # service reads the already-rewritten state.
+      - { event: ntfy_post, service: swap.probe, state: swap.probe }
+
+    order:
+      - before: { event: rule_response, kind: put, id: swap-fields }
+        after:  { event: ntfy_post, rule: swap-fields }
+
+    count:
+      # One event, two leaves, two posts. An implementation that mutates the
+      # event in place still produces two posts, but both carry the swapped
+      # values and the second `contains` above fails.
+      - match: { event: ntfy_post, rule: swap-fields }
+        equals: 2
+      - match: { event: ntfy_post, service: alpha }
+        equals: 1
+      - match: { event: ntfy_post, service: swap.probe }
+        equals: 1
+
+    field_exists:
+      # The two posts traversed different leaves, so each carries its own path.
+      - match: { event: ntfy_post, rule: swap-fields }
+        field: node
