@@ -39,7 +39,7 @@ Out of scope for v0:
 - A **combinator** is a node in that tree. A **sink leaf** is a terminal node naming a destination.
 - A **firing** is one event reaching one sink leaf through one rule.
 - The **sink receiver** is the harness-owned HTTP server standing in for ntfy and InfluxDB. It is the oracle.
-- `shard` names a partition of the event stream. How many exist, and whether more than one exists, is the implementation's choice bounded by `--shards`.
+- `shard` names a partition of the event stream. `--shards` gives the number of partitions and is honoured exactly: a value of 4 means four partitions, each with its own inbox, its own slice of the index, its own ring and its own timers. An event is routed to a partition by a deterministic function of its `host`, so every event for one host lands in the same partition for the life of the process and an identity's state is never split across two. Which function, and how a partition's work is executed, are the implementation's choice.
 
 ## Event model (normative)
 
@@ -119,7 +119,7 @@ The binary is `riemannd`. It takes no subcommand.
 | `--influx-org` | yes | string | InfluxDB organization. |
 | `--influx-bucket` | yes | string | InfluxDB bucket. |
 | `--rules` | yes | string | Path to a JSON file holding an array of rule documents, loaded at startup. |
-| `--shards` | no | integer | Number of event partitions. Default `runtime.GOMAXPROCS(0)`. |
+| `--shards` | no | integer | Number of event partitions, honoured exactly. Must be 1 or greater; anything else is fatal at startup. Default `runtime.GOMAXPROCS(0)`. |
 | `--set` | no | `name=value`, repeatable | Sets one parameter named in `SCALE.md`. An unrecognised name is fatal at startup, named in the error. |
 
 `--set` exists because `SCALE.md` calls those values parameters. A parameter with no way to set it is a constant, and a document that calls it otherwise is wrong. One repeatable flag keeps the surface flat: a new parameter in `SCALE.md` adds no new flag, and a name the binary does not know fails at startup rather than being ignored, which is property 17 applied to configuration rather than to a missing flag.
@@ -185,7 +185,7 @@ No `/v1` prefix. Additional read paths may be added but MUST NOT collide with th
 | `expires_at` | no | Float seconds since epoch. Past that time the rule behaves as disabled. |
 | `version` | server-owned | Monotonic integer per id. A client-supplied `version` is ignored. |
 
-A `global` rule receives a copy of every event. A `host` or `host,service` rule sees only the events of the partition it runs on. A rule declaring `host` whose tree contains `coalesce` is refused at `PUT` with `400`, because a per-host partition cannot answer a fleet-wide fold.
+A `global` rule receives a copy of every event, from every partition, and holds one instance of its state for the whole process rather than one per partition. A `host` or `host,service` rule runs in each partition over that partition's events alone. With `--shards 1` these coincide, which is why a generation that collapses every partition into one passes a scenario that a multi-partition run would fail: the per-partition metrics still report, and `riemann.shard.*` carries a `shard` attribute naming which partition it describes, so a run with `--shards 4` emits that set four times. A `host` or `host,service` rule sees only the events of the partition it runs on. A rule declaring `host` whose tree contains `coalesce` is refused at `PUT` with `400`, because a per-host partition cannot answer a fleet-wide fold.
 
 **Combinators.** Each node is an object with `op` and, except for `splitp`, a `children` array.
 
