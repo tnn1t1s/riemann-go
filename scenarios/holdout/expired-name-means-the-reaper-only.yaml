@@ -1,0 +1,137 @@
+name: expired-name-means-the-reaper-only
+description: >
+  Source: upstream `expired-test` and `not-expired-test` in
+  riemann/test/riemann/streams_test.clj, plus the `(where* expired?)` case in
+  `where*-test`. Adjusted, because SEMANTICS.md "Expiry", "The `expired` name"
+  states that riemann-go's `expired` is a strictly narrower predicate than
+  upstream's.
+
+  Upstream's `expired?` (src/riemann/streams.clj:50-59) is true in two
+  situations, and its two tests cover one each: `expired-test`'s first case
+  drives events whose `state` is the string "expired", and its second case
+  drives events whose `time` plus `ttl` has already passed while their state is
+  ordinary. Upstream cannot tell a reaper event from a stale one.
+  riemann-go's `expired` name is true for neither of those: SPEC.md's
+  expression language defines it as true when the event was produced by index
+  expiry rather than by ingest, and SEMANTICS.md says an author who wants both
+  writes the state comparison instead.
+
+  So this scenario drives all three kinds of event past both predicates and
+  asserts which combinations fire:
+
+    reaper event      `expired` yes, `state == "expired"` yes
+    client-sent       `expired` no,  `state == "expired"` yes
+    stale timestamp   `expired` no,  `state == "expired"` no
+
+  The stale event carries a `time` in the distant past with a one-second ttl.
+  HARNESS.md says scenarios do not backdate the `time` field, on the grounds
+  that backdating advances no timer. That reason does not apply here: this
+  event's timestamp is the data under test rather than a way to move a clock,
+  and the event is never routed to an index leaf, so nothing schedules an
+  expiry from it.
+
+  Only `exp.probe` is indexed, so exactly one reaper event exists in the run.
+
+  Wrong implementations this catches: the obvious port of upstream's
+  `expired?`, where the stale event satisfies `expired` and the whole scenario
+  inverts; an `expired` implemented as a synonym for `state == "expired"`,
+  which makes the client-sent event fire the reaper rule; a reaper that copies
+  the expiring entry wholesale, which would carry metric 1 into the expiry
+  alert.
+
+  Expected wall clock: 1 s of stimulus, a 2 s ttl, and an 8 s settle.
+
+settle_seconds: 8
+
+rules:
+  # Puts one identity in the index so that there is something to expire.
+  - id: archive-probe
+    owner: arena
+    partition: host
+    match: 'service == "exp.probe"'
+    stream: { sink: index }
+
+  # The engine's own signal. True only for what the index reaper produced.
+  - id: expired-by-name
+    owner: arena
+    partition: host
+    match: 'service == "exp.probe" || service == "exp.client" || service == "exp.stale"'
+    stream:
+      op: where
+      expr: "expired"
+      children:
+        - op: set
+          fields: { service: '"exp.byname"' }
+          children:
+            - { sink: ntfy }
+
+  # The broader test an author writes when they want both sources.
+  - id: expired-by-state
+    owner: arena
+    partition: host
+    match: 'service == "exp.probe" || service == "exp.client" || service == "exp.stale"'
+    stream:
+      op: where
+      expr: 'state == "expired"'
+      children:
+        - op: set
+          fields: { service: '"exp.bystate"' }
+          children:
+            - { sink: ntfy }
+
+stimulus:
+  # Indexed with a 2 s ttl. Its reaper event arrives during the settle window
+  # carrying host and service and no metric.
+  - at: 0.0s
+    emit:
+      events: [{ host: ghost, service: exp.probe, state: ok, metric: 1, ttl: 2 }]
+
+  # A client saying "expired" in the state field. Not the index's own signal.
+  - at: 0.5s
+    emit:
+      events: [{ host: ghost, service: exp.client, state: expired, metric: 2, ttl: 300 }]
+
+  # Stale on arrival: time plus ttl is decades in the past. Upstream's
+  # `expired?` is true for this event; riemann-go's `expired` is not, and its
+  # state is not "expired" either, so it satisfies neither predicate.
+  - at: 1.0s
+    emit:
+      events: [{ host: ghost, service: exp.stale, state: ok, metric: 3, ttl: 1, time: 1000000000.0 }]
+
+expect:
+  trace:
+    contains:
+      # The reaper event, seen by both predicates. Its metric is null because
+      # the synthesized event copies only host and service.
+      - { event: ntfy_post, service: exp.byname, host: ghost, state: expired, metric: null }
+      - { event: ntfy_post, service: exp.bystate, host: ghost, state: expired, metric: null }
+      # The client-sent event, seen by the state comparison alone.
+      - { event: ntfy_post, service: exp.bystate, metric: 2 }
+
+    not_contains:
+      # `expired` is not a synonym for the state string.
+      - { event: ntfy_post, service: exp.byname, metric: 2 }
+      # Neither predicate holds for a stale timestamp.
+      - { event: ntfy_post, metric: 3 }
+      # The expiring entry's metric did not survive into the reaper event.
+      - { event: ntfy_post, metric: 1 }
+      - { event: ingest_response, status: 400 }
+
+    order:
+      # The client event was ingested long before the entry's ttl lapsed.
+      - before: { event: ntfy_post, service: exp.bystate, metric: 2 }
+        after:  { event: ntfy_post, service: exp.byname }
+
+    count:
+      # One reaper event in the run, and only the reaper event satisfies it.
+      - match: { event: ntfy_post, service: exp.byname }
+        equals: 1
+      # The reaper event and the client-sent one.
+      - match: { event: ntfy_post, service: exp.bystate }
+        equals: 2
+      - match: { event: ntfy_post }
+        equals: 3
+
+    field_exists:
+      - match: { event: ntfy_post, service: exp.byname }
+        field: node

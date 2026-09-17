@@ -1,0 +1,129 @@
+name: throttle-window-anchors-on-the-first-event
+description: >
+  Source: upstream `part-time-simple-test` in
+  riemann/test/riemann/streams_test.clj, which tests the window mechanism
+  `throttle` is built on. Adjusted, because this is the mechanism riemann-go
+  deliberately departed from, so the test cannot be ported as a claim about
+  what riemann-go does. What it can do is name the observable difference and
+  assert riemann-go's side of it.
+
+  Upstream's test takes an anchor at construction time and divides wall time
+  into fixed bins from it. With an anchor at 1 and a window of 5 the bins are
+  [1,6), [6,11), [11,16) and so on forever, whether or not any event arrives.
+  The test's own output shows what that means across a gap: events arrive at
+  1, 2 and 4, then at 6, 8 and 9, then nothing until 99. The window that
+  receives the t=99 event is [96,101), a bin whose start precedes the event by
+  three units, and t=101 opens the next bin rather than continuing the one
+  t=99 started. Nothing about the gap resets the grid.
+
+  SEMANTICS.md `throttle` states riemann-go's rule instead: "A window opens
+  when an event arrives for a fork key with no open window, and it closes
+  `window_seconds` of event time later", and classifies the change as a
+  heuristic replacing an accident, on the grounds that no upstream test depends
+  on the anchor's value and that a grid derived from process start time cannot
+  be reproduced under a scenario timeline. This scenario is the case that makes
+  the two rules disagree, which is the gap, and it is the assertion that no
+  upstream test carries.
+
+  The timeline is a burst, a gap longer than a window, and a second burst
+  straddling where the fixed grid's boundary would fall. Under first-event
+  anchoring the second burst's window opens at metric 4 and closes 2 s later,
+  so metric 6 is the third event in one window and is discarded. Under a grid
+  anchored anywhere near the rule's installation, metric 6 falls in a fresh bin
+  and passes. That one event is the whole difference and the scenario names it.
+
+  The verdict does not depend on SEMANTICS.md Open question 2. Under the
+  sliding reading of SPEC.md property 9, metric 6 at t=4.1 is preceded by two
+  passed events within the previous 2 s and is discarded as well.
+
+  Rescaled from upstream's units: a window of 5 becomes 2 s and upstream's
+  90-unit silence becomes a 1.8 s gap, which is longer than one window and is
+  all the property needs. Upstream advances a test clock explicitly; here the
+  offsets are real wall clock, so the second burst is placed 0.9 s clear of the
+  first window's close rather than on top of it.
+
+  Wrong implementations this catches: a throttle whose windows are fixed
+  divisions of wall time from an anchor taken at startup or at rule
+  installation, which admits metric 6; a throttle whose window never closes,
+  which discards metrics 4, 5 and 6; a throttle that resets its count on every
+  event rather than on the window boundary, which admits everything; an
+  off-by-one admitting a third event per window, which admits metric 3.
+
+  Expected wall clock: about 4.1 s of stimulus plus a 4 s settle.
+
+settle_seconds: 4
+
+rules:
+  - id: anchored-bound
+    owner: arena
+    partition: host
+    match: 'service == "anchor.probe"'
+    stream:
+      op: throttle
+      limit: 2
+      window_seconds: 2
+      children:
+        - { sink: ntfy }
+
+stimulus:
+  # First burst. Metric 1 opens a window that closes at about t=2.0.
+  - at: 0.0s
+    emit:
+      events: [{ host: ghost, service: anchor.probe, state: s1, metric: 1, ttl: 300 }]
+  - at: 0.2s
+    emit:
+      events: [{ host: ghost, service: anchor.probe, state: s2, metric: 2, ttl: 300 }]
+  # Third in that window. Discarded under every reading.
+  - at: 0.4s
+    emit:
+      events: [{ host: ghost, service: anchor.probe, state: s3, metric: 3, ttl: 300 }]
+
+  # The gap. Nothing arrives for 2.5 s, which is longer than a window, so the
+  # first window closes with no event at its boundary and produces nothing.
+
+  # Second burst. Metric 4 opens a window that closes at about t=4.9, and the
+  # 0.9 s of slack below the first window's close is for wall-clock jitter.
+  - at: 2.9s
+    emit:
+      events: [{ host: ghost, service: anchor.probe, state: s4, metric: 4, ttl: 300 }]
+  - at: 3.1s
+    emit:
+      events: [{ host: ghost, service: anchor.probe, state: s5, metric: 5, ttl: 300 }]
+  # The event that separates the two rules. Third in the window metric 4
+  # opened, so riemann-go discards it. A fixed grid anchored anywhere from
+  # about -0.9 s to +0.1 s puts a boundary between metric 5 and this event and
+  # admits it as the first of a new bin.
+  - at: 4.1s
+    emit:
+      events: [{ host: ghost, service: anchor.probe, state: s6, metric: 6, ttl: 300 }]
+
+expect:
+  trace:
+    contains:
+      - { event: ntfy_post, service: anchor.probe, metric: 1 }
+      - { event: ntfy_post, service: anchor.probe, metric: 2 }
+      # The window reopened at the first event after the gap rather than on a
+      # grid, so both of these are inside one allowance.
+      - { event: ntfy_post, service: anchor.probe, metric: 4 }
+      - { event: ntfy_post, service: anchor.probe, metric: 5 }
+
+    not_contains:
+      # Over the limit in the first window.
+      - { event: ntfy_post, metric: 3 }
+      # The departure, in one assertion.
+      - { event: ntfy_post, metric: 6 }
+      - { event: ingest_response, status: 400 }
+
+    order:
+      - before: { event: ntfy_post, metric: 2 }
+        after:  { event: ntfy_post, metric: 4 }
+
+    count:
+      # Six events in, four out, two per window, and no window boundary emits
+      # anything of its own.
+      - match: { event: ntfy_post, service: anchor.probe }
+        equals: 4
+
+    field_exists:
+      - match: { event: ntfy_post, service: anchor.probe }
+        field: node
