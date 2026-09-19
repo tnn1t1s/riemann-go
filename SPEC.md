@@ -121,12 +121,17 @@ The binary is `riemannd`. It takes no subcommand.
 | `--rules` | yes | string | Path to a JSON file holding an array of rule documents, loaded at startup. |
 | `--shards` | no | integer | Number of event partitions, honoured exactly. Must be 1 or greater; anything else is fatal at startup. Default `runtime.GOMAXPROCS(0)`. |
 | `--set` | no | `name=value`, repeatable | Sets one parameter named in `SCALE.md`. An unrecognised name is fatal at startup, named in the error. |
+| `--influx-token-file` | no | string | Path to a file holding an InfluxDB token. When given, every write carries `Authorization: Token <contents>`; when absent, writes carry no credential. |
 
 `--set` exists because `SCALE.md` calls those values parameters. A parameter with no way to set it is a constant, and a document that calls it otherwise is wrong. One repeatable flag keeps the surface flat: a new parameter in `SCALE.md` adds no new flag, and a name the binary does not know fails at startup rather than being ignored, which is property 17 applied to configuration rather than to a missing flag.
 
 Flag names are double-dash long form. Short aliases are not part of the contract. A missing required flag is property 17: exit non-zero naming the flag, bind nothing, start no goroutine that talks to a sink.
 
-Two things are deliberately open. Whether rules submitted over HTTP are written back to `--rules` is the implementation's choice, since no scenario asserts across a restart. Sink credentials are not in the contract for v0; the sink receiver requires none, and a generation that adds a token flag has added surface the spec did not ask for.
+Whether rules submitted over HTTP are written back to `--rules` is deliberately open, since no scenario asserts across a restart.
+
+`--influx-token-file` takes a path rather than the token itself, so the secret never appears in the process table or in a deployment spec. It is optional because the arena's sink receiver requires no credential and a real InfluxDB does: ghost's rejects an unauthenticated write with `401`. The file is read once at startup, a trailing newline is stripped, nothing else about the contents is interpreted, and a path that cannot be read is fatal and named, per property 17.
+
+The ntfy sink has no credential flag because the bus this serves takes none. When that changes it gets the same treatment, a path rather than a value.
 
 ## HTTP surface (normative)
 
