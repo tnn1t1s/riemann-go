@@ -3,9 +3,16 @@
 #
 # Usage:
 #   bin/generate [target_dir]
+#   MODEL=<model-id> bin/generate [target_dir]
 #   bin/generate --help
 #
-#   target_dir defaults to scratch/gen-<timestamp>
+#   target_dir defaults to scratch/gen-<timestamp>, or scratch/gen-<timestamp>-<model>
+#   when MODEL is set.
+#
+# The model is one of the three reproducibility pins, so it is recorded in
+# manifest.json beside the spec SHA and the prompt SHA. Leaving MODEL unset
+# uses whatever the CLI defaults to, which pins nothing; set it for any run
+# whose result will be compared with another.
 #
 # The spec is the only input. There is no feedback side-channel: no FEEDBACK.md,
 # no "last time you got X wrong" note, no prior generation on disk for the
@@ -64,7 +71,13 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 2
 fi
 
-TARGET="${1:-$REPO_DIR/scratch/gen-$(date +%Y%m%d-%H%M%S)}"
+MODEL="${MODEL:-}"
+if [ -n "$MODEL" ]; then
+  DEFAULT_TARGET="$REPO_DIR/scratch/gen-$(date +%Y%m%d-%H%M%S)-$(printf '%s' "$MODEL" | tr -c 'A-Za-z0-9._-' '-')"
+else
+  DEFAULT_TARGET="$REPO_DIR/scratch/gen-$(date +%Y%m%d-%H%M%S)"
+fi
+TARGET="${1:-$DEFAULT_TARGET}"
 mkdir -p "$TARGET"
 
 PROMPT="$(sed "s|__SPEC_PATH__|$REPO_DIR|g" "$PROMPT_TEMPLATE")"
@@ -76,11 +89,16 @@ echo "Generating riemann-go into: $TARGET"
 echo "Spec:                       $REPO_DIR/SPEC.md"
 echo "Spec SHA:                   $SPEC_SHA"
 echo "Prompt SHA:                 $PROMPT_SHA"
+echo "Model:                      ${MODEL:-<cli default, unpinned>}"
 echo
 
 cd "$TARGET"
 
+MODEL_ARGS=()
+[ -n "$MODEL" ] && MODEL_ARGS=(--model "$MODEL")
+
 claude -p "$PROMPT" \
+  "${MODEL_ARGS[@]}" \
   --permission-mode acceptEdits \
   --allowedTools "Read,Write,Edit,Bash" \
   --max-turns 60
@@ -90,5 +108,15 @@ echo "Generated tree at: $TARGET"
 echo "Files:"
 find "$TARGET" -type f -name '*.go' | head -50
 echo
+cat > "$TARGET/manifest.json" <<JSON
+{
+  "spec_sha": "$SPEC_SHA",
+  "prompt_sha": "$PROMPT_SHA",
+  "model": "${MODEL:-unpinned}",
+  "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "note": "Input-reproducible, not output-reproducible: these pins fix the inputs to a sampled model, not the artifact."
+}
+JSON
+
 echo "SPEC-GAP notes:"
 grep -rn "SPEC-GAP:" "$TARGET" || echo "  (none)"
