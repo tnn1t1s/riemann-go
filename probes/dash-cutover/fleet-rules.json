@@ -1,0 +1,59 @@
+[
+  {
+    "id": "index-everything",
+    "owner": "ops",
+    "partition": "host",
+    "match": "true",
+    "stream": { "op": "where", "expr": "true", "children": [ { "sink": "index" } ] }
+  },
+  {
+    "id": "listener-up",
+    "owner": "ops",
+    "partition": "host",
+    "match": "service == \"ntfy.listen.up\"",
+    "stream": { "op": "changed-state", "initial": "ok", "children": [ { "sink": "ntfy" } ] }
+  },
+  {
+    "id": "listener-connected",
+    "owner": "ops",
+    "partition": "host",
+    "match": "service == \"ntfy.listen.connected\"",
+    "stream": {
+      "op": "changed-state", "initial": "ok",
+      "children": [ { "op": "by", "fields": ["host","service"],
+        "children": [ { "op": "throttle", "limit": 5, "window_seconds": 300,
+          "children": [ { "sink": "ntfy" } ] } ] } ]
+    }
+  },
+  {
+    "id": "agent-crashed",
+    "owner": "atlas",
+    "partition": "host",
+    "match": "service == \"agent.session\" && state == \"expired\"",
+    "stream": {
+      "op": "set",
+      "fields": { "service": "\"agent.crashed\"", "state": "\"critical\"" },
+      "children": [ { "sink": "index" }, { "sink": "ntfy" } ]
+    }
+  },
+  {
+    "id": "atlas-cost",
+    "owner": "atlas",
+    "partition": "host",
+    "match": "tagged(\"agent-obs\") && service == \"agent.cost\"",
+    "stream": {
+      "op": "splitp", "test": "{} < metric",
+      "branches": [
+        { "threshold": 20.0, "stream": { "op": "set", "fields": { "state": "\"critical\"" },
+          "children": [ { "sink": "index" }, { "ref": "transition" } ] } },
+        { "threshold": 5.0, "stream": { "op": "set", "fields": { "state": "\"warning\"" },
+          "children": [ { "sink": "index" }, { "ref": "transition" } ] } }
+      ],
+      "otherwise": { "op": "set", "fields": { "state": "\"ok\"" },
+        "children": [ { "sink": "index" }, { "ref": "transition" } ] }
+    },
+    "bindings": {
+      "transition": { "op": "changed-state", "initial": "ok", "children": [ { "sink": "ntfy" } ] }
+    }
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "server": "127.0.0.1:5561",
+  "server_type": "sse",
+  "workspaces": [
+    {
+      "name": "fleet / riemann-go",
+      "view": {
+        "type": "Balloon",
+        "child": {
+          "type": "VStack",
+          "children": [
+            {"type": "Log", "title": "fleet heartbeats", "query": "tagged \"health-loop\"", "weight": 3},
+            {"type": "Flot", "title": "cluster tasks running", "query": "service = \"cluster.tasks.running\"", "timeRange": 300, "weight": 2},
+            {"type": "Log", "title": "listeners", "query": "service =~ \"ntfy.listen %\"", "weight": 2}
+          ]
+        }
+      }
+    }
+  ]
+}
