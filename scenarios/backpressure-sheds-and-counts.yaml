@@ -30,10 +30,19 @@ rules:
     partition: host
     match: 'service == "riemann.sink.ntfy.dropped" && metric > 0'
     stream:
-      op: changed-state
-      initial: ok
+      # Not changed-state. Self-observation events carry state "ok" on every
+      # sample, so a changed-state here never sees a transition and correctly
+      # suppresses all of them; three generations implemented that faithfully
+      # and this scenario called each of them wrong. A throttle gives the
+      # "tell me once" the rule wanted, keyed on arrival rather than on state.
+      op: throttle
+      limit: 1
+      window_seconds: 60
       children:
-        - { sink: ntfy }
+        # Not ntfy. This rule reports that the ntfy queue is shedding, and its
+        # own alert would join that same queue and be shed with everything
+        # else. An alert about a saturated sink cannot travel through it.
+        - { sink: influx }
 
   # The accounting identity, asserted by its absence. `riemann.accounting.residual`
   # is the self-observation field this property needs and SPEC.md must pin: it
@@ -69,7 +78,7 @@ expect:
   trace:
     contains:
       # Drops were counted and surfaced as events, not lost silently.
-      - { event: ntfy_post, rule: shed-detector }
+      - { event: influx_write, measurement: riemann.sink.ntfy.dropped }
 
     not_contains:
       # A slow sink does not saturate the loop, so no emitter sees a 429.
@@ -79,7 +88,7 @@ expect:
 
     order:
       - before: { event: ingest_response, status: 202 }
-        after:  { event: ntfy_post, rule: shed-detector }
+        after:  { event: influx_write, measurement: riemann.sink.ntfy.dropped }
 
     count:
       # Every batch was admitted: twenty batches of a hundred.
@@ -93,5 +102,5 @@ expect:
         max: 150
 
     field_exists:
-      - match: { event: ntfy_post, rule: shed-detector }
+      - match: { event: influx_write, measurement: riemann.sink.ntfy.dropped }
         field: metric
