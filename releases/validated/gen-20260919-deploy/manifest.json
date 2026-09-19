@@ -1,0 +1,14 @@
+{
+  "spec_sha": "244527794d35e169c2eb9bedf2bdee62511fd70a",
+  "prompt_sha": "3f2fedfd6160ebe911b2c0b145a977f74b6bd2143eb068fd5e3afc29ecb2ced5",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-09-19T17:37:12Z",
+  "note": "First generation carrying --influx-token-file. Input-reproducible, not output-reproducible.",
+  "tag": "gen-20260919-deploy",
+  "trust": "validated",
+  "promoted_at": "2026-09-19T17:44:05Z",
+  "development_corpus": "9/9 green",
+  "holdout_set": "15/15 green",
+  "deployment_check": "authenticated InfluxDB write verified on ghost: event accepted, routed by rule, row present in bucket metrics",
+  "harness_commit": "9da9cae791adff47b82097f9a23b18f395675ae2"
+}
