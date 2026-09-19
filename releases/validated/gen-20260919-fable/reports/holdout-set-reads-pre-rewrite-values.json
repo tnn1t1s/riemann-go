@@ -1,0 +1,226 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/set-reads-pre-rewrite-values.yaml",
+  "scenario_name": "set-reads-pre-rewrite-values",
+  "scenario_description": "Source: SEMANTICS.md `set`, first and second edge cases, neither of which has a worked example. Every field expression is evaluated against the incoming event rather than against the partially rewritten one, so two fields that reference each other both read the old values and the key order cannot change the result. And the incoming event is not modified, so a sibling child of the node above sees the original. Asserts SPEC.md property 11.\nThe rewrite is a swap: `service` takes the old `state` and `state` takes the old `service`. A swap is the smallest expression pair that distinguishes the correct fold-over-the-original from the obvious sequential implementation, and it distinguishes both key orders of that sequential implementation from each other as well.\nThe `set` node has a sibling ntfy leaf under the same `where`, so the same event reaches the oracle twice: once rewritten and once not. An implementation that rewrites in place loses the second one.\nExpected wall clock: one event at t=0 plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63762",
+  "sink_receiver": "http://127.0.0.1:63761",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 5.022,
+  "sink_request_count": 2,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 9,
+    "assertions_total": 9
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "alpha",
+          "state": "swap.probe",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "swap.probe",
+          "state": "alpha",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 4,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "alpha",
+          "state": "alpha"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "swap.probe",
+          "state": "swap.probe"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "swap-fields"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "rule": "swap-fields"
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 3,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "swap-fields"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "alpha"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "swap.probe"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "swap-fields"
+        },
+        "field": "node",
+        "match_count": 2,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837029.665952,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "swap-fields",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837029.666659,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789837029.666941,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost alpha swap.probe",
+      "message": "ghost alpha is swap.probe (1)\nriemann-go: {\"rule\":\"swap-fields\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"alpha\",\"state\":\"swap.probe\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:swap-fields",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost alpha swap.probe\",\"message\":\"ghost alpha is swap.probe (1)\\nriemann-go: {\\\"rule\\\":\\\"swap-fields\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"alpha\\\",\\\"state\\\":\\\"swap.probe\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:swap-fields\",\"owner:arena\"]}",
+      "rule": "swap-fields",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "alpha",
+      "state": "swap.probe",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789837029.6672268,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost swap.probe alpha",
+      "message": "ghost swap.probe is alpha (1)\nriemann-go: {\"rule\":\"swap-fields\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"swap.probe\",\"state\":\"alpha\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/1\"}",
+      "priority": 3,
+      "tags": [
+        "rule:swap-fields",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost swap.probe alpha\",\"message\":\"ghost swap.probe is alpha (1)\\nriemann-go: {\\\"rule\\\":\\\"swap-fields\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"swap.probe\\\",\\\"state\\\":\\\"alpha\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/1\\\"}\",\"priority\":3,\"tags\":[\"rule:swap-fields\",\"owner:arena\"]}",
+      "rule": "swap-fields",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "swap.probe",
+      "state": "alpha",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/1",
+      "seq": 4
+    },
+    {
+      "ts": 1789837034.678696,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "swap-fields",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 5
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:09 riemannd listening on 127.0.0.1:63762 with 8 partitions\n"
+}

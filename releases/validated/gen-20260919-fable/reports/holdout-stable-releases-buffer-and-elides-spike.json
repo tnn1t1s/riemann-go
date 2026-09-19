@@ -1,0 +1,340 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/stable-releases-buffer-and-elides-spike.yaml",
+  "scenario_name": "stable-releases-buffer-and-elides-spike",
+  "scenario_description": "Source: upstream `stable-test`, the \"ignores spikes\" case in riemann/test/riemann/streams_test.clj, translated to wall-clock windows. Asserts SEMANTICS.md `stable` in full: the first event for a key is buffered rather than passed, the buffer is released when the watched value has held for `duration_seconds` and the releasing event is included in the release, and a value change discards the buffer so the events in it never reach a sink.\nNo scenario in the development corpus drives `stable` at all; HARNESS.md names it as one that would use a 3 s window when written.\nEvery event carries a distinct `metric`, because the property is about which events are emitted and which are destroyed, not how many. The two `warning` events are the spike: they are buffered, then discarded when the value returns to `ok`, and they must never appear at the oracle.\nExpected wall clock: about 9.4 s of stimulus plus a 4 s settle, so a little under 14 s.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63839",
+  "sink_receiver": "http://127.0.0.1:63838",
+  "settle_seconds": 4.0,
+  "wall_clock_seconds": 13.441,
+  "sink_request_count": 5,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 9,
+    "assertions_total": 9
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 4,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 3
+        },
+        "match_count": 1,
+        "first_seq": 7,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 6
+        },
+        "match_count": 1,
+        "first_seq": 11,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 7
+        },
+        "match_count": 1,
+        "first_seq": 13,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "warning"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ntfy_post",
+          "metric": 3
+        },
+        "after": {
+          "event": "ntfy_post",
+          "metric": 6
+        },
+        "before_first_seq": 7,
+        "after_first_seq": 11,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "stable.probe"
+        },
+        "match_count": 5,
+        "equals": 5,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "stable.probe"
+        },
+        "field": "node",
+        "match_count": 5,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837049.153934,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "stall-detector",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837049.154678,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789837049.959939,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789837052.158923,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost stable.probe ok",
+      "message": "ghost stable.probe is ok (1)\nriemann-go: {\"rule\":\"stall-detector\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"stable.probe\",\"state\":\"ok\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:stall-detector",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost stable.probe ok\",\"message\":\"ghost stable.probe is ok (1)\\nriemann-go: {\\\"rule\\\":\\\"stall-detector\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"stable.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:stall-detector\",\"owner:arena\"]}",
+      "rule": "stall-detector",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "stable.probe",
+      "state": "ok",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 4
+    },
+    {
+      "ts": 1789837052.159683,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost stable.probe ok",
+      "message": "ghost stable.probe is ok (2)\nriemann-go: {\"rule\":\"stall-detector\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"stable.probe\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:stall-detector",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost stable.probe ok\",\"message\":\"ghost stable.probe is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"stall-detector\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"stable.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:stall-detector\",\"owner:arena\"]}",
+      "rule": "stall-detector",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "stable.probe",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789837052.561693,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789837052.5617979,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost stable.probe ok",
+      "message": "ghost stable.probe is ok (3)\nriemann-go: {\"rule\":\"stall-detector\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"stable.probe\",\"state\":\"ok\",\"metric\":3,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:stall-detector",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost stable.probe ok\",\"message\":\"ghost stable.probe is ok (3)\\nriemann-go: {\\\"rule\\\":\\\"stall-detector\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"stable.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":3,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:stall-detector\",\"owner:arena\"]}",
+      "rule": "stall-detector",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "stable.probe",
+      "state": "ok",
+      "metric": 3,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 7
+    },
+    {
+      "ts": 1789837053.361697,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 8
+    },
+    {
+      "ts": 1789837054.1565912,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 9
+    },
+    {
+      "ts": 1789837055.162803,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 10
+    },
+    {
+      "ts": 1789837058.1666439,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost stable.probe ok",
+      "message": "ghost stable.probe is ok (6)\nriemann-go: {\"rule\":\"stall-detector\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"stable.probe\",\"state\":\"ok\",\"metric\":6,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:stall-detector",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost stable.probe ok\",\"message\":\"ghost stable.probe is ok (6)\\nriemann-go: {\\\"rule\\\":\\\"stall-detector\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"stable.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":6,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:stall-detector\",\"owner:arena\"]}",
+      "rule": "stall-detector",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "stable.probe",
+      "state": "ok",
+      "metric": 6,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 11
+    },
+    {
+      "ts": 1789837058.562741,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 12
+    },
+    {
+      "ts": 1789837058.562845,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost stable.probe ok",
+      "message": "ghost stable.probe is ok (7)\nriemann-go: {\"rule\":\"stall-detector\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"stable.probe\",\"state\":\"ok\",\"metric\":7,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:stall-detector",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost stable.probe ok\",\"message\":\"ghost stable.probe is ok (7)\\nriemann-go: {\\\"rule\\\":\\\"stall-detector\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"stable.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":7,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:stall-detector\",\"owner:arena\"]}",
+      "rule": "stall-detector",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "stable.probe",
+      "state": "ok",
+      "metric": 7,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 13
+    },
+    {
+      "ts": 1789837062.5713851,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "stall-detector",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 14
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:29 riemannd listening on 127.0.0.1:63839 with 8 partitions\n"
+}

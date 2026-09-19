@@ -1,0 +1,220 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/coalesce-emits-expired-identity-once.yaml",
+  "scenario_name": "coalesce-emits-expired-identity-once",
+  "scenario_description": "Source: upstream `coalesce-test` in riemann/test/riemann/streams_test.clj, translated, and SEMANTICS.md `coalesce`, second and fifth edge cases. Asserts the convergence property: an identity whose ttl has lapsed appears in the emitted set exactly once and is then removed, so a fold over the set stops counting a dead identity instead of counting it forever.\nThree identities arrive, one of them with a 2 s ttl. The fold is oversized, meaning three or more members, on the arrival that completes the trio and again on the first arrival after the short-lived identity has aged out, since that arrival is the one that delivers it on its way out. Every later arrival sees two members. So the correct count of oversize alerts is exactly two: an implementation that never drops an aged-out identity gives four, and one that drops it without emitting it gives one.\nCaveat worth stating, because it decides how to read a failure. SPEC.md exposes `events` inside a `coalesce` subtree and says nothing about how a predicate reads its size, and it does not say which event a sink leaf below a `coalesce` receives. This scenario assumes `len(events)` and asserts only on the rule id at the oracle, which are the weakest assumptions available. A failure at the `PUT` rather than at the sink is a statement about that gap, not about the fold.\nExpected wall clock: about 5 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63646",
+  "sink_receiver": "http://127.0.0.1:63645",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 10.029,
+  "sink_request_count": 2,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 5,
+    "assertions_total": 5
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "fold-oversize"
+        },
+        "match_count": 2,
+        "first_seq": 5,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ingest_response",
+          "status": 400
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "fold-oversize"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "rule": "fold-oversize"
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 5,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "fold-oversize"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "fold-oversize"
+        },
+        "field": "node",
+        "match_count": 2,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836986.4005919,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "fold-oversize",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836986.401189,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836986.7072551,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789836987.007298,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789836987.007543,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "gamma fold.probe ok",
+      "message": "gamma fold.probe is ok (3)\nriemann-go: {\"rule\":\"fold-oversize\",\"version\":1,\"owner\":\"arena\",\"host\":\"gamma\",\"service\":\"fold.probe\",\"state\":\"ok\",\"metric\":3,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:fold-oversize",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"gamma fold.probe ok\",\"message\":\"gamma fold.probe is ok (3)\\nriemann-go: {\\\"rule\\\":\\\"fold-oversize\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"gamma\\\",\\\"service\\\":\\\"fold.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":3,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:fold-oversize\",\"owner:arena\"]}",
+      "rule": "fold-oversize",
+      "version": 1,
+      "owner": "arena",
+      "host": "gamma",
+      "service": "fold.probe",
+      "state": "ok",
+      "metric": 3,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789836990.413051,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789836990.413335,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "gamma fold.probe ok",
+      "message": "gamma fold.probe is ok (4)\nriemann-go: {\"rule\":\"fold-oversize\",\"version\":1,\"owner\":\"arena\",\"host\":\"gamma\",\"service\":\"fold.probe\",\"state\":\"ok\",\"metric\":4,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:fold-oversize",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"gamma fold.probe ok\",\"message\":\"gamma fold.probe is ok (4)\\nriemann-go: {\\\"rule\\\":\\\"fold-oversize\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"gamma\\\",\\\"service\\\":\\\"fold.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":4,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:fold-oversize\",\"owner:arena\"]}",
+      "rule": "fold-oversize",
+      "version": 1,
+      "owner": "arena",
+      "host": "gamma",
+      "service": "fold.probe",
+      "state": "ok",
+      "metric": 4,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 7
+    },
+    {
+      "ts": 1789836990.90719,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 8
+    },
+    {
+      "ts": 1789836991.4082031,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 9
+    },
+    {
+      "ts": 1789836996.417666,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "fold-oversize",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 10
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:56:26 riemannd listening on 127.0.0.1:63646 with 1 partitions\n"
+}

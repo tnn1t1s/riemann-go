@@ -1,0 +1,225 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/expiry-event-carries-only-identity.yaml",
+  "scenario_name": "expiry-event-carries-only-identity",
+  "scenario_description": "Source: SEMANTICS.md \"Expiry\", \"The shape of the synthesized event\", which states the consequence without a worked example: the synthesized event copies only `host` and `service`, so its `metric`, `tags` and `attributes` are the event model's defaults and a rule matching a tag together with the expired state never fires. Asserts SPEC.md property 4 and that sentence.\nThe development corpus's `expiry-becomes-event` asserts only that an expiry alert arrives. That passes against an implementation that synthesizes the expiry event by copying the whole expiring entry and overwriting `state`, which is the obvious implementation and the wrong one. Two rules separate them: one matches the expired state alone and must fire, the other matches the expired state together with a tag the expiring entry carried and must never fire.\n`archive-probe` exists because SEMANTICS.md \"Indexing\" says there is no implicit indexing: an entry reaches the index only through a `{\"sink\":\"index\"}` leaf. The scenario routes the event there explicitly so that it does not depend on whether a generation indexes at ingest.\nExpected wall clock: no stimulus after t=0, a 2 s ttl, and a 9 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63728",
+  "sink_receiver": "http://127.0.0.1:63727",
+  "settle_seconds": 9.0,
+  "wall_clock_seconds": 9.024,
+  "sink_request_count": 1,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 8,
+    "assertions_total": 8
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "expiry-any",
+          "host": "ghost",
+          "service": "agent.tokens.out",
+          "state": "expired",
+          "metric": null
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "expiry-tagged"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 1234
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "ok"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ingest_response",
+          "status": 202
+        },
+        "after": {
+          "event": "ntfy_post",
+          "rule": "expiry-any"
+        },
+        "before_first_seq": 4,
+        "after_first_seq": 5,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "expiry-any"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "expiry-any"
+        },
+        "field": "node",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837013.800645,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "archive-probe",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837013.801337,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "expiry-any",
+      "status": 201,
+      "version": 1,
+      "seq": 2
+    },
+    {
+      "ts": 1789837013.802113,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "expiry-tagged",
+      "status": 201,
+      "version": 1,
+      "seq": 3
+    },
+    {
+      "ts": 1789837013.8026822,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789837015.805847,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost agent.tokens.out expired",
+      "message": "ghost agent.tokens.out is expired (null)\nriemann-go: {\"rule\":\"expiry-any\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"agent.tokens.out\",\"state\":\"expired\",\"metric\":null,\"prior_state\":null,\"node\":\"stream\"}",
+      "priority": 3,
+      "tags": [
+        "rule:expiry-any",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost agent.tokens.out expired\",\"message\":\"ghost agent.tokens.out is expired (null)\\nriemann-go: {\\\"rule\\\":\\\"expiry-any\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"agent.tokens.out\\\",\\\"state\\\":\\\"expired\\\",\\\"metric\\\":null,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream\\\"}\",\"priority\":3,\"tags\":[\"rule:expiry-any\",\"owner:arena\"]}",
+      "rule": "expiry-any",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "agent.tokens.out",
+      "state": "expired",
+      "metric": null,
+      "prior_state": null,
+      "node": "stream",
+      "seq": 5
+    },
+    {
+      "ts": 1789837022.8151329,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "archive-probe",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 6
+    },
+    {
+      "ts": 1789837022.816514,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "expiry-any",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 7
+    },
+    {
+      "ts": 1789837022.8174562,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "expiry-tagged",
+      "status": 200,
+      "version": null,
+      "fired": false,
+      "seq": 8
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:56:53 riemannd listening on 127.0.0.1:63728 with 8 partitions\n"
+}

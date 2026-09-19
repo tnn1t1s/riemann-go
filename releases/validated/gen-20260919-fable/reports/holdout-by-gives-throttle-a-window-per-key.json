@@ -1,0 +1,284 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/by-gives-throttle-a-window-per-key.yaml",
+  "scenario_name": "by-gives-throttle-a-window-per-key",
+  "scenario_description": "Source: an interaction the development corpus covers nowhere. `by` is exercised alone and `throttle` is exercised alone, and SEMANTICS.md `by` (\"Timing\") states that a `throttle` under a `by` has one window per key. Asserts SPEC.md property 7 applied to property 9.\nPer-key throttle state is exactly the kind of thing one shared counter fakes successfully in a scenario that only counts alerts. Here two hosts interleave under a `throttle` of one per window, so the correct implementation emits the first event of each host and a single shared counter emits only the first event overall. The two outcomes differ in which alerts arrive, not only in how many.\nThe window is 6 s and the stimulus is under 2 s, so no window closes while events are arriving and every suppression in this scenario is the limit doing its work rather than a boundary.\nExpected wall clock: about 2 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63574",
+  "sink_receiver": "http://127.0.0.1:63573",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 7.129,
+  "sink_request_count": 2,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 11,
+    "assertions_total": 11
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "alpha",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "beta",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 4,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 3
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 4
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 5
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 6
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ntfy_post",
+          "host": "alpha",
+          "metric": 1
+        },
+        "after": {
+          "event": "ntfy_post",
+          "host": "beta",
+          "metric": 2
+        },
+        "before_first_seq": 3,
+        "after_first_seq": 4,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "per-host-bound"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "alpha"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "beta"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "per-host-bound"
+        },
+        "field": "node",
+        "match_count": 2,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836962.3400261,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "per-host-bound",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836962.3418581,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836962.34364,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "alpha fork.probe ok",
+      "message": "alpha fork.probe is ok (1)\nriemann-go: {\"rule\":\"per-host-bound\",\"version\":1,\"owner\":\"arena\",\"host\":\"alpha\",\"service\":\"fork.probe\",\"state\":\"ok\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:per-host-bound",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"alpha fork.probe ok\",\"message\":\"alpha fork.probe is ok (1)\\nriemann-go: {\\\"rule\\\":\\\"per-host-bound\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"alpha\\\",\\\"service\\\":\\\"fork.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:per-host-bound\",\"owner:arena\"]}",
+      "rule": "per-host-bound",
+      "version": 1,
+      "owner": "arena",
+      "host": "alpha",
+      "service": "fork.probe",
+      "state": "ok",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789836962.652607,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "beta fork.probe ok",
+      "message": "beta fork.probe is ok (2)\nriemann-go: {\"rule\":\"per-host-bound\",\"version\":1,\"owner\":\"arena\",\"host\":\"beta\",\"service\":\"fork.probe\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:per-host-bound",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"beta fork.probe ok\",\"message\":\"beta fork.probe is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"per-host-bound\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"beta\\\",\\\"service\\\":\\\"fork.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:per-host-bound\",\"owner:arena\"]}",
+      "rule": "per-host-bound",
+      "version": 1,
+      "owner": "arena",
+      "host": "beta",
+      "service": "fork.probe",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 4
+    },
+    {
+      "ts": 1789836962.653589,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 5
+    },
+    {
+      "ts": 1789836963.156159,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789836963.4467719,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 7
+    },
+    {
+      "ts": 1789836963.9557278,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 8
+    },
+    {
+      "ts": 1789836964.247027,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 9
+    },
+    {
+      "ts": 1789836969.2526631,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "per-host-bound",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 10
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:56:02 riemannd listening on 127.0.0.1:63574 with 1 partitions\n"
+}

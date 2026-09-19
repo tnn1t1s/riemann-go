@@ -1,0 +1,305 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/splitp-branch-state-is-per-branch.yaml",
+  "scenario_name": "splitp-branch-state-is-per-branch",
+  "scenario_description": "Source: upstream `splitp-test`'s \"Evaluates child streams once at creation time\" and `split-test`'s \"evaluates streams once\", translated. Upstream counts constructions with an atom: each branch's stream is built once when the stream is defined, and four events later the counters still read one. A construction count is not observable over HTTP, so the scenario asserts the consequence SEMANTICS.md draws from it instead: branch subtrees hold state across events rather than being rebuilt per event, and each branch's state is independent because branches are separate subtrees rather than separate fork keys, so \"a `changed-state` inside a branch sees only the events that reached that branch and is blind to events that took a sibling\".\nA `changed-state` sits in each of the two branches. Three of the four events carry state `warning`, and the fourth carries `critical`. What separates the implementations is which of them are suppressed:\n\n  metric 15  high branch, first event there, warning against initial   fires\n  metric 1   low branch,  first event there, warning against initial   fires\n  metric 16  high branch, warning again                            suppressed\n  metric 2   low branch,  critical after warning                       fires\n\nOne `changed-state` shared by both branches suppresses metric 1, because the event before it left `warning` remembered, and gives two alerts. A subtree rebuilt for each event remembers nothing, so metric 16 fires too and it gives four. The correct implementation gives three, and the three are identifiable individually rather than only countable.\nThe branch entry is spelled `threshold` plus `stream`, per SPEC.md's combinator table, and `otherwise` holds its subtree directly.\nThis is not the fork-key property. There is no `by` here, and SEMANTICS.md `splitp` is explicit that branch independence is structural rather than keyed. A single identity sends every event, so an implementation that got branch independence by accidentally forking on host would not be caught here, and is not the subject.\nWrong implementations this catches: one `changed-state` instance shared across the branches of a `splitp`; a branch subtree instantiated per event; a `splitp` that delivers to more than one branch, which fires metric 16 from the low branch.\nExpected wall clock: about 1.5 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63777",
+  "sink_receiver": "http://127.0.0.1:63776",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 6.532,
+  "sink_request_count": 3,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 12,
+    "assertions_total": 12
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.high",
+          "metric": 15,
+          "state": "warning"
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.low",
+          "metric": 1,
+          "state": "warning"
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.low",
+          "metric": 2,
+          "state": "critical"
+        },
+        "match_count": 1,
+        "first_seq": 8,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 16
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.high",
+          "metric": 1
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.high",
+          "metric": 2
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.low",
+          "metric": 15
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ntfy_post",
+          "metric": 15
+        },
+        "after": {
+          "event": "ntfy_post",
+          "metric": 1
+        },
+        "before_first_seq": 3,
+        "after_first_seq": 5,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "branch-state"
+        },
+        "match_count": 3,
+        "equals": 3,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.high"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "bs.low"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 2
+        },
+        "field": "prior_state",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837035.322104,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "branch-state",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837035.322859,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789837035.3231292,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost bs.high warning",
+      "message": "ghost bs.high is warning (15)\nriemann-go: {\"rule\":\"branch-state\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"bs.high\",\"state\":\"warning\",\"metric\":15,\"prior_state\":\"ok\",\"node\":\"stream/branches/0/0/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:branch-state",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost bs.high warning\",\"message\":\"ghost bs.high is warning (15)\\nriemann-go: {\\\"rule\\\":\\\"branch-state\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"bs.high\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":15,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/branches/0/0/0\\\"}\",\"priority\":4,\"tags\":[\"rule:branch-state\",\"owner:arena\"]}",
+      "rule": "branch-state",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "bs.high",
+      "state": "warning",
+      "metric": 15,
+      "prior_state": "ok",
+      "node": "stream/branches/0/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789837035.82956,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789837035.829705,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost bs.low warning",
+      "message": "ghost bs.low is warning (1)\nriemann-go: {\"rule\":\"branch-state\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"bs.low\",\"state\":\"warning\",\"metric\":1,\"prior_state\":\"ok\",\"node\":\"stream/otherwise/0/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:branch-state",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost bs.low warning\",\"message\":\"ghost bs.low is warning (1)\\nriemann-go: {\\\"rule\\\":\\\"branch-state\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"bs.low\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":1,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/otherwise/0/0\\\"}\",\"priority\":4,\"tags\":[\"rule:branch-state\",\"owner:arena\"]}",
+      "rule": "branch-state",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "bs.low",
+      "state": "warning",
+      "metric": 1,
+      "prior_state": "ok",
+      "node": "stream/otherwise/0/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789837036.330081,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789837036.828288,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 7
+    },
+    {
+      "ts": 1789837036.828429,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost bs.low critical",
+      "message": "ghost bs.low is critical (2)\nriemann-go: {\"rule\":\"branch-state\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"bs.low\",\"state\":\"critical\",\"metric\":2,\"prior_state\":\"warning\",\"node\":\"stream/otherwise/0/0\"}",
+      "priority": 5,
+      "tags": [
+        "rule:branch-state",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost bs.low critical\",\"message\":\"ghost bs.low is critical (2)\\nriemann-go: {\\\"rule\\\":\\\"branch-state\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"bs.low\\\",\\\"state\\\":\\\"critical\\\",\\\"metric\\\":2,\\\"prior_state\\\":\\\"warning\\\",\\\"node\\\":\\\"stream/otherwise/0/0\\\"}\",\"priority\":5,\"tags\":[\"rule:branch-state\",\"owner:arena\"]}",
+      "rule": "branch-state",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "bs.low",
+      "state": "critical",
+      "metric": 2,
+      "prior_state": "warning",
+      "node": "stream/otherwise/0/0",
+      "seq": 8
+    },
+    {
+      "ts": 1789837041.841444,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "branch-state",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 9
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:15 riemannd listening on 127.0.0.1:63777 with 1 partitions\n"
+}

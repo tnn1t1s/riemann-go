@@ -1,0 +1,204 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/provenance-on-alert.yaml",
+  "scenario_name": "provenance-on-alert",
+  "scenario_description": "Every ntfy post names the rule that produced it, that rule's version, its owner, the prior state changed-state left, and the node path traversed, so an alert consumer can act without opening the config. SPEC.md \"Alert shape (normative)\". The existing Clojure alert format carries none of these, which is why this is a scenario and not an assumption.\nPresence, not value: the version is dynamic and the node path depends on the tree, so field_exists is the right operator. The one value asserted is `rule`, because a post that names the wrong rule is worse than one that names none.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63437",
+  "sink_receiver": "http://127.0.0.1:63436",
+  "settle_seconds": 6.0,
+  "wall_clock_seconds": 7.023,
+  "sink_request_count": 1,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 9,
+    "assertions_total": 9
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "agent.cost",
+          "state": "warning",
+          "rule": "atlas-cost"
+        },
+        "match_count": 1,
+        "first_seq": 4,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "agent.cost",
+          "state": "critical"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "atlas-cost"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 4,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "field": "version",
+        "match_count": 1,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "field": "owner",
+        "match_count": 1,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "field": "prior_state",
+        "match_count": 1,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "field": "node",
+        "match_count": 1,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "atlas-cost"
+        },
+        "field": "metric",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836927.9349,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "atlas-cost",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836927.9355211,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836928.942219,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789836928.942711,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost agent.cost warning",
+      "message": "ghost agent.cost is warning (7.5)\nriemann-go: {\"rule\":\"atlas-cost\",\"version\":1,\"owner\":\"atlas\",\"host\":\"ghost\",\"service\":\"agent.cost\",\"state\":\"warning\",\"metric\":7.5,\"prior_state\":\"ok\",\"node\":\"bindings/transition/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:atlas-cost",
+        "owner:atlas"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost agent.cost warning\",\"message\":\"ghost agent.cost is warning (7.5)\\nriemann-go: {\\\"rule\\\":\\\"atlas-cost\\\",\\\"version\\\":1,\\\"owner\\\":\\\"atlas\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"agent.cost\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":7.5,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"bindings/transition/0\\\"}\",\"priority\":4,\"tags\":[\"rule:atlas-cost\",\"owner:atlas\"]}",
+      "rule": "atlas-cost",
+      "version": 1,
+      "owner": "atlas",
+      "host": "ghost",
+      "service": "agent.cost",
+      "state": "warning",
+      "metric": 7.5,
+      "prior_state": "ok",
+      "node": "bindings/transition/0",
+      "seq": 4
+    },
+    {
+      "ts": 1789836934.9487429,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "atlas-cost",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 5
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:55:27 riemannd listening on 127.0.0.1:63437 with 8 partitions\n"
+}

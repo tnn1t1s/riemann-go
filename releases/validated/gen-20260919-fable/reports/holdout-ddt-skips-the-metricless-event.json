@@ -1,0 +1,171 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/ddt-skips-the-metricless-event.yaml",
+  "scenario_name": "ddt-skips-the-metricless-event",
+  "scenario_description": "Source: upstream `ddt-immediate-test` in riemann/test/riemann/streams_test.clj (\"ignore stream without metrics\", \"do nothing the first time\"), and SEMANTICS.md `ddt`, first and third edge cases. Asserts that an event with no `metric` is ignored entirely, producing no output and not becoming the previous event, so the next event carrying a metric differentiates across the gap; and that the first event for a fork key produces nothing.\nThe series is deliberately flat: two readings of 10 with a metric-less event between them. A flat series has a rate of exactly zero whatever the elapsed time is, which is what makes this assertable on a real clock at all. The scenario does not need to know how many milliseconds passed, only that the numerator is zero.\nThe two `where` nodes under the `ddt` split zero from non-zero and each rewrites the service, so the outcome is a service name at the oracle rather than a float comparison in the matcher.\nExpected wall clock: about 2 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63664",
+  "sink_receiver": "http://127.0.0.1:63663",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 7.233,
+  "sink_request_count": 1,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 5,
+    "assertions_total": 5
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "ddt.zero",
+          "rule": "rate-of-change"
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ddt.nonzero"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "rate-of-change"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "service": "ddt.zero"
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 5,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "rate-of-change"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ddt.zero"
+        },
+        "field": "node",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836996.902646,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "rate-of-change",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836996.9035468,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836997.92351,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789836998.911134,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789836998.913451,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ddt.zero ok",
+      "message": "ghost ddt.zero is ok (0)\nriemann-go: {\"rule\":\"rate-of-change\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"ddt.zero\",\"state\":\"ok\",\"metric\":0,\"prior_state\":null,\"node\":\"stream/0/0/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:rate-of-change",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ddt.zero ok\",\"message\":\"ghost ddt.zero is ok (0)\\nriemann-go: {\\\"rule\\\":\\\"rate-of-change\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ddt.zero\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":0,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:rate-of-change\",\"owner:arena\"]}",
+      "rule": "rate-of-change",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "ddt.zero",
+      "state": "ok",
+      "metric": 0,
+      "prior_state": null,
+      "node": "stream/0/0/0/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789837003.918432,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "rate-of-change",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 6
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:56:36 riemannd listening on 127.0.0.1:63664 with 8 partitions\n"
+}

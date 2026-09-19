@@ -1,0 +1,335 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/set-derives-fields-from-the-incoming-event.yaml",
+  "scenario_name": "set-derives-fields-from-the-incoming-event",
+  "scenario_description": "Source: three upstream tests of the same shape in riemann/test/riemann/streams_test.clj, all translated into riemann-go's `set`, which SEMANTICS.md describes as upstream's `with` with expressions in place of literal values.\n`with-map` sets a field to a constant and carries every other field through: `(with {:service \"foo\"} ...)` on `{:service \"bar\" :test \"baz\"}` yields service \"foo\" with \"baz\" untouched.\n`adjust-test` derives a field from the event. Its first case is `(adjust [:state str \" 2\"])`, which appends to the event's own state, and it drives an empty event through to get `\" 2\"` from a state that is not there. Its second case is `#(assoc % :metric (count (:tags %)))`, a metric computed from the tag list.\n`smap-test`'s \"increment\" case is `(smap inc)` over metrics, which is the same operation once `smap`'s general function is restricted to one named field.\nTwo of these translate with a caveat. Upstream's `with` deletes a key when the value is nil (src/riemann/streams.clj:1364-1366), and SEMANTICS.md Open question 4 records that riemann-go has not decided what a `set` expression evaluating to null does, so nothing here evaluates to null. `smap-test`'s other case, \"ignores nil values\", and the whole of `smap*-test`, are about a stream that emits nil, which riemann-go's event model has no equivalent for.\nThe second event is the empty-event row of `adjust-test`: it carries no state and no tags, so the expressions must read SPEC.md's documented defaults, an empty string and an empty array, and produce \"-adj\" and 0. An implementation that skips an expression whose referenced field is absent, or that carries the old value through, fails on that event alone.\nWrong implementations this catches: a `set` that assigns the expression source text rather than its value; a `set` that drops fields it does not name, which loses the host and fails every `contains` here; an absent `tags` read as null rather than as an empty array, which makes `len(tags)` an error or a nil instead of 0; an absent `state` treated as missing rather than as \"\", which yields no alert or the wrong string.\nExpected wall clock: about 0.5 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63751",
+  "sink_receiver": "http://127.0.0.1:63750",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 5.521,
+  "sink_request_count": 4,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 14,
+    "assertions_total": 14
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "set.derived",
+          "state": "ok-adj",
+          "metric": 11
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "set.tagcount",
+          "state": "ok",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 4,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.derived",
+          "state": "-adj",
+          "metric": 6
+        },
+        "match_count": 1,
+        "first_seq": 6,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.tagcount",
+          "metric": 0
+        },
+        "match_count": 1,
+        "first_seq": 7,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.probe"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.derived",
+          "metric": 10
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.derived",
+          "metric": 5
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.tagcount",
+          "state": "ok-adj"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ingest_response",
+          "status": 400
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ntfy_post",
+          "service": "set.derived",
+          "metric": 11
+        },
+        "after": {
+          "event": "ntfy_post",
+          "service": "set.derived",
+          "metric": 6
+        },
+        "before_first_seq": 3,
+        "after_first_seq": 6,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "derive"
+        },
+        "match_count": 4,
+        "equals": 4,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.derived"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "set.tagcount"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "derive"
+        },
+        "field": "node",
+        "match_count": 4,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837023.483865,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "derive",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837023.484577,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789837023.485903,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost set.derived ok-adj",
+      "message": "ghost set.derived is ok-adj (11)\nriemann-go: {\"rule\":\"derive\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"set.derived\",\"state\":\"ok-adj\",\"metric\":11,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:derive",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost set.derived ok-adj\",\"message\":\"ghost set.derived is ok-adj (11)\\nriemann-go: {\\\"rule\\\":\\\"derive\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"set.derived\\\",\\\"state\\\":\\\"ok-adj\\\",\\\"metric\\\":11,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:derive\",\"owner:arena\"]}",
+      "rule": "derive",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "set.derived",
+      "state": "ok-adj",
+      "metric": 11,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789837023.486177,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost set.tagcount ok",
+      "message": "ghost set.tagcount is ok (2)\nriemann-go: {\"rule\":\"derive\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"set.tagcount\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/1/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:derive",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost set.tagcount ok\",\"message\":\"ghost set.tagcount is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"derive\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"set.tagcount\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/1/0\\\"}\",\"priority\":2,\"tags\":[\"rule:derive\",\"owner:arena\"]}",
+      "rule": "derive",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "set.tagcount",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/1/0",
+      "seq": 4
+    },
+    {
+      "ts": 1789837023.9886699,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 5
+    },
+    {
+      "ts": 1789837023.9887621,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost set.derived -adj",
+      "message": "ghost set.derived is -adj (6)\nriemann-go: {\"rule\":\"derive\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"set.derived\",\"state\":\"-adj\",\"metric\":6,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:derive",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost set.derived -adj\",\"message\":\"ghost set.derived is -adj (6)\\nriemann-go: {\\\"rule\\\":\\\"derive\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"set.derived\\\",\\\"state\\\":\\\"-adj\\\",\\\"metric\\\":6,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:derive\",\"owner:arena\"]}",
+      "rule": "derive",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "set.derived",
+      "state": "-adj",
+      "metric": 6,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 6
+    },
+    {
+      "ts": 1789837023.988957,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost set.tagcount ",
+      "message": "ghost set.tagcount is  (0)\nriemann-go: {\"rule\":\"derive\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"set.tagcount\",\"state\":\"\",\"metric\":0,\"prior_state\":null,\"node\":\"stream/1/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:derive",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost set.tagcount \",\"message\":\"ghost set.tagcount is  (0)\\nriemann-go: {\\\"rule\\\":\\\"derive\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"set.tagcount\\\",\\\"state\\\":\\\"\\\",\\\"metric\\\":0,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/1/0\\\"}\",\"priority\":3,\"tags\":[\"rule:derive\",\"owner:arena\"]}",
+      "rule": "derive",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "set.tagcount",
+      "state": "",
+      "metric": 0,
+      "prior_state": null,
+      "node": "stream/1/0",
+      "seq": 7
+    },
+    {
+      "ts": 1789837028.996039,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "derive",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 8
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:03 riemannd listening on 127.0.0.1:63751 with 8 partitions\n"
+}

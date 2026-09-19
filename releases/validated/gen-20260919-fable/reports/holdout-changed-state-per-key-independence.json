@@ -1,0 +1,393 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/changed-state-per-key-independence.yaml",
+  "scenario_name": "changed-state-per-key-independence",
+  "scenario_description": "Source: upstream `changed-state-test` in riemann/test/riemann/streams_test.clj, translated. Asserts SPEC.md property 7 (`by` partitions state) together with property 8 (`changed-state` suppresses repeats), and SEMANTICS.md `by` / `changed-state`.\nUpstream drives seven events across three (host, service) identities through one `changed-state` and asserts exactly six reach the child, with the one suppressed event being a restatement of a state that identity already held. This is that sequence with the states renamed so that the transitions are visible at the oracle, and with a distinct `metric` on every event so that each firing is identified individually rather than only counted.\nThe identities are (alpha, cpu.load), (beta, cpu.load) and (beta, disk.load). Event 3 restates (alpha, cpu.load) as `warning`, which that identity already holds, so it must be suppressed. Every other event is a transition for its own identity even though several of them restate a state some *other* identity holds, which is the part a single shared remembered state gets wrong.\nExpected wall clock: about 3 s of stimulus plus a 6 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63610",
+  "sink_receiver": "http://127.0.0.1:63609",
+  "settle_seconds": 6.0,
+  "wall_clock_seconds": 8.423,
+  "sink_request_count": 6,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 10,
+    "assertions_total": 10
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "alpha",
+          "service": "cpu.load",
+          "state": "warning",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "beta",
+          "service": "cpu.load",
+          "state": "warning",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "alpha",
+          "service": "cpu.load",
+          "state": "critical",
+          "metric": 4
+        },
+        "match_count": 1,
+        "first_seq": 8,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "beta",
+          "service": "cpu.load",
+          "state": "critical",
+          "metric": 5
+        },
+        "match_count": 1,
+        "first_seq": 10,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "beta",
+          "service": "disk.load",
+          "state": "warning",
+          "metric": 6
+        },
+        "match_count": 1,
+        "first_seq": 12,
+        "ok": true
+      },
+      {
+        "index": 5,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "beta",
+          "service": "cpu.load",
+          "state": "warning",
+          "metric": 7
+        },
+        "match_count": 1,
+        "first_seq": 14,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 3
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "state-fanout"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "rule": "state-fanout"
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 3,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "state-fanout"
+        },
+        "match_count": 6,
+        "equals": 6,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 7
+        },
+        "field": "prior_state",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836977.723341,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "state-fanout",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836977.724019,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836977.724246,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "alpha cpu.load warning",
+      "message": "alpha cpu.load is warning (1)\nriemann-go: {\"rule\":\"state-fanout\",\"version\":1,\"owner\":\"arena\",\"host\":\"alpha\",\"service\":\"cpu.load\",\"state\":\"warning\",\"metric\":1,\"prior_state\":\"ok\",\"node\":\"stream/0/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:state-fanout",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"alpha cpu.load warning\",\"message\":\"alpha cpu.load is warning (1)\\nriemann-go: {\\\"rule\\\":\\\"state-fanout\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"alpha\\\",\\\"service\\\":\\\"cpu.load\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":1,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":4,\"tags\":[\"rule:state-fanout\",\"owner:arena\"]}",
+      "rule": "state-fanout",
+      "version": 1,
+      "owner": "arena",
+      "host": "alpha",
+      "service": "cpu.load",
+      "state": "warning",
+      "metric": 1,
+      "prior_state": "ok",
+      "node": "stream/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789836978.129771,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789836978.129895,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "beta cpu.load warning",
+      "message": "beta cpu.load is warning (2)\nriemann-go: {\"rule\":\"state-fanout\",\"version\":1,\"owner\":\"arena\",\"host\":\"beta\",\"service\":\"cpu.load\",\"state\":\"warning\",\"metric\":2,\"prior_state\":\"ok\",\"node\":\"stream/0/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:state-fanout",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"beta cpu.load warning\",\"message\":\"beta cpu.load is warning (2)\\nriemann-go: {\\\"rule\\\":\\\"state-fanout\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"beta\\\",\\\"service\\\":\\\"cpu.load\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":2,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":4,\"tags\":[\"rule:state-fanout\",\"owner:arena\"]}",
+      "rule": "state-fanout",
+      "version": 1,
+      "owner": "arena",
+      "host": "beta",
+      "service": "cpu.load",
+      "state": "warning",
+      "metric": 2,
+      "prior_state": "ok",
+      "node": "stream/0/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789836978.529946,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789836978.9302778,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 7
+    },
+    {
+      "ts": 1789836978.930401,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "alpha cpu.load critical",
+      "message": "alpha cpu.load is critical (4)\nriemann-go: {\"rule\":\"state-fanout\",\"version\":1,\"owner\":\"arena\",\"host\":\"alpha\",\"service\":\"cpu.load\",\"state\":\"critical\",\"metric\":4,\"prior_state\":\"warning\",\"node\":\"stream/0/0\"}",
+      "priority": 5,
+      "tags": [
+        "rule:state-fanout",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"alpha cpu.load critical\",\"message\":\"alpha cpu.load is critical (4)\\nriemann-go: {\\\"rule\\\":\\\"state-fanout\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"alpha\\\",\\\"service\\\":\\\"cpu.load\\\",\\\"state\\\":\\\"critical\\\",\\\"metric\\\":4,\\\"prior_state\\\":\\\"warning\\\",\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":5,\"tags\":[\"rule:state-fanout\",\"owner:arena\"]}",
+      "rule": "state-fanout",
+      "version": 1,
+      "owner": "arena",
+      "host": "alpha",
+      "service": "cpu.load",
+      "state": "critical",
+      "metric": 4,
+      "prior_state": "warning",
+      "node": "stream/0/0",
+      "seq": 8
+    },
+    {
+      "ts": 1789836979.3303869,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 9
+    },
+    {
+      "ts": 1789836979.330519,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "beta cpu.load critical",
+      "message": "beta cpu.load is critical (5)\nriemann-go: {\"rule\":\"state-fanout\",\"version\":1,\"owner\":\"arena\",\"host\":\"beta\",\"service\":\"cpu.load\",\"state\":\"critical\",\"metric\":5,\"prior_state\":\"warning\",\"node\":\"stream/0/0\"}",
+      "priority": 5,
+      "tags": [
+        "rule:state-fanout",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"beta cpu.load critical\",\"message\":\"beta cpu.load is critical (5)\\nriemann-go: {\\\"rule\\\":\\\"state-fanout\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"beta\\\",\\\"service\\\":\\\"cpu.load\\\",\\\"state\\\":\\\"critical\\\",\\\"metric\\\":5,\\\"prior_state\\\":\\\"warning\\\",\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":5,\"tags\":[\"rule:state-fanout\",\"owner:arena\"]}",
+      "rule": "state-fanout",
+      "version": 1,
+      "owner": "arena",
+      "host": "beta",
+      "service": "cpu.load",
+      "state": "critical",
+      "metric": 5,
+      "prior_state": "warning",
+      "node": "stream/0/0",
+      "seq": 10
+    },
+    {
+      "ts": 1789836979.730919,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 11
+    },
+    {
+      "ts": 1789836979.731096,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "beta disk.load warning",
+      "message": "beta disk.load is warning (6)\nriemann-go: {\"rule\":\"state-fanout\",\"version\":1,\"owner\":\"arena\",\"host\":\"beta\",\"service\":\"disk.load\",\"state\":\"warning\",\"metric\":6,\"prior_state\":\"ok\",\"node\":\"stream/0/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:state-fanout",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"beta disk.load warning\",\"message\":\"beta disk.load is warning (6)\\nriemann-go: {\\\"rule\\\":\\\"state-fanout\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"beta\\\",\\\"service\\\":\\\"disk.load\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":6,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":4,\"tags\":[\"rule:state-fanout\",\"owner:arena\"]}",
+      "rule": "state-fanout",
+      "version": 1,
+      "owner": "arena",
+      "host": "beta",
+      "service": "disk.load",
+      "state": "warning",
+      "metric": 6,
+      "prior_state": "ok",
+      "node": "stream/0/0",
+      "seq": 12
+    },
+    {
+      "ts": 1789836980.129874,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 13
+    },
+    {
+      "ts": 1789836980.129956,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "beta cpu.load warning",
+      "message": "beta cpu.load is warning (7)\nriemann-go: {\"rule\":\"state-fanout\",\"version\":1,\"owner\":\"arena\",\"host\":\"beta\",\"service\":\"cpu.load\",\"state\":\"warning\",\"metric\":7,\"prior_state\":\"critical\",\"node\":\"stream/0/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:state-fanout",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"beta cpu.load warning\",\"message\":\"beta cpu.load is warning (7)\\nriemann-go: {\\\"rule\\\":\\\"state-fanout\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"beta\\\",\\\"service\\\":\\\"cpu.load\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":7,\\\"prior_state\\\":\\\"critical\\\",\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":4,\"tags\":[\"rule:state-fanout\",\"owner:arena\"]}",
+      "rule": "state-fanout",
+      "version": 1,
+      "owner": "arena",
+      "host": "beta",
+      "service": "cpu.load",
+      "state": "warning",
+      "metric": 7,
+      "prior_state": "critical",
+      "node": "stream/0/0",
+      "seq": 14
+    },
+    {
+      "ts": 1789836986.138753,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "state-fanout",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 15
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:56:17 riemannd listening on 127.0.0.1:63610 with 1 partitions\n"
+}

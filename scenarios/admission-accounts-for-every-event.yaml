@@ -1,0 +1,71 @@
+name: admission-accounts-for-every-event
+description: >
+  Under a tiny inbox and a one-millisecond admission deadline, every event a
+  batch contains is accounted for: admitted and reaching a sink, or refused
+  with a status that says so. Nothing is silently lost and no request fails.
+  SPEC.md property 2 and property 16.
+
+  This scenario used to assert that a 429 occurs, on the reasoning that a batch
+  larger than the inbox cannot be fully admitted. That reasoning is wrong: a
+  loop draining while the handler offers will admit the whole batch, so whether
+  a 429 appears depends on loop speed rather than on conformance. Three
+  generations proved it, one producing a 429 and two not, all three correct.
+  Forcing the 429 path needs a way to stall the loop, which would be test-only
+  surface the spec does not have; see HARNESS.md "What this corpus does not
+  cover".
+
+config:
+  engine.shards: 1
+  shard.inbox_capacity: 8
+  ingest.admission_deadline: 1
+
+rules:
+  - id: archive-all
+    owner: arena
+    partition: host
+    match: "true"
+    stream: { sink: influx }
+
+settle_seconds: 10
+
+stimulus:
+  # One batch of 500 into an inbox of 8, with a 1 ms deadline. Some prefix is
+  # admitted; the remainder is rejected and counted.
+  - at: 0s
+    emit:
+      events:
+        - { host: ghost, service: flood.event, state: ok, metric: 1, ttl: 300 }
+  - at: 0.2s
+    emit_n:
+      count: 500
+      batch_size: 500
+      template:
+        host: "host-{i}"
+        service: flood.event
+        state: ok
+        metric: 1
+        ttl: 300
+
+expect:
+  trace:
+    contains:
+      # The single event posted before the flood was admitted normally.
+      - { event: ingest_response, status: 202, accepted: 1 }
+
+    not_contains:
+      # Pressure is not a malformed request, and never a server fault.
+      - { event: ingest_response, status: 400 }
+      - { event: ingest_response, status: 500 }
+
+    count:
+      # Admitted events are not rolled back: what got in still reaches influx.
+      - match: { event: influx_write, host: ghost }
+        min: 1
+
+    field_exists:
+      # Every reply says how many it took, which is what lets a fire-and-forget
+      # emitter count its own loss. A 429 additionally carries `rejected`, but
+      # a 429 is not reachable on demand here, so this asserts the part that
+      # holds on every reply.
+      - match: { event: ingest_response, status: 202 }
+        field: accepted

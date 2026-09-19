@@ -274,6 +274,9 @@ The self-test then runs a negative control, a pattern that must not match, and f
 
 ## What this corpus does not cover
 
+**The 429 path.** A 429 requires the partition inbox to stay full past the admission deadline, and the harness has no way to hold it there: a loop that drains while the handler offers admits the whole batch however small the inbox is. One generation produced a 429 under a tiny inbox and two did not, and all three were conforming. Forcing it would need a way to stall the loop from outside, which is test-only surface the spec does not have and should not grow. `admission-accounts-for-every-event` asserts what holds either way, that every event is accounted for and every reply says how many it took.
+
+
 Stated plainly, because a gap nobody wrote down is a gap nobody closes.
 
 `admission-429-on-loop-saturation` reaches its 429 by shrinking the inbox and the deadline rather than by outrunning the loop. Driving a 3.4-million-events-per-second loop into saturation from Python is not something this harness can do, so the scenario tests the admission path and says nothing about throughput. SCALE.md's flood floor is the observation that covers the other half.

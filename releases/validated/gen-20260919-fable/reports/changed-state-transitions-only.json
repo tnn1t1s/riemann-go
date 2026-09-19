@@ -1,0 +1,198 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/changed-state-transitions-only.yaml",
+  "scenario_name": "changed-state-transitions-only",
+  "scenario_description": "changed-state forwards an event only when its state differs from the state it last saw for that key. Five events in the same state produce nothing; the sixth, in a different state, produces exactly one alert. Ported from riemann/test/riemann/streams_test.clj changed-state-test, and the property the fleet's ntfy.listen.up rule depends on today.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63369",
+  "sink_receiver": "http://127.0.0.1:63368",
+  "settle_seconds": 6.0,
+  "wall_clock_seconds": 8.245,
+  "sink_request_count": 1,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 5,
+    "assertions_total": 5
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "ntfy.listen.connected",
+          "state": "critical"
+        },
+        "match_count": 1,
+        "first_seq": 8,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ntfy.listen.connected",
+          "state": "ok"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ingest_response",
+          "status": 202
+        },
+        "after": {
+          "event": "ntfy_post",
+          "state": "critical"
+        },
+        "before_first_seq": 2,
+        "after_first_seq": 8,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ntfy.listen.connected"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "critical"
+        },
+        "field": "prior_state",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836905.583679,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "listener-connected",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836905.584588,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836905.991094,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789836906.3920908,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789836906.790804,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 5
+    },
+    {
+      "ts": 1789836907.192427,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789836907.5964532,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 7
+    },
+    {
+      "ts": 1789836907.599766,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected critical",
+      "message": "ghost ntfy.listen.connected is critical (0)\nriemann-go: {\"rule\":\"listener-connected\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"critical\",\"metric\":0,\"prior_state\":\"ok\",\"node\":\"stream/0\"}",
+      "priority": 5,
+      "tags": [
+        "rule:listener-connected",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected critical\",\"message\":\"ghost ntfy.listen.connected is critical (0)\\nriemann-go: {\\\"rule\\\":\\\"listener-connected\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"critical\\\",\\\"metric\\\":0,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":5,\"tags\":[\"rule:listener-connected\",\"owner:ops\"]}",
+      "rule": "listener-connected",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "critical",
+      "metric": 0,
+      "prior_state": "ok",
+      "node": "stream/0",
+      "seq": 8
+    },
+    {
+      "ts": 1789836913.608248,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "listener-connected",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 9
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:55:05 riemannd listening on 127.0.0.1:63369 with 8 partitions\n"
+}

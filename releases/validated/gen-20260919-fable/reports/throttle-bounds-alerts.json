@@ -1,0 +1,443 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/throttle-bounds-alerts.yaml",
+  "scenario_name": "throttle-bounds-alerts",
+  "scenario_description": "throttle passes at most `limit` events per `window_seconds` and drops the rest. A stream flapping four times a second through changed-state produces twenty transitions; a throttle of 2 per 2 s must let a small bounded number through, not twenty. Ported from streams_test.clj throttle-test, and the shape the fleet's ntfy.listen.connected rule uses to keep a flapping listener reading as one burst rather than a page per flip.\nThe window is 2 s on the wall clock, not the fleet's 300 s. Window length is a rule parameter the scenario chooses, while the combinator semantics are what the corpus tests, and both exercise the same throttle. See HARNESS.md \"Time-domain scenarios use short real windows\".\nThe bound is asserted globally over the run rather than per window, because the five operators have no time arithmetic. Twenty transitions arrive over five seconds, so at most three windows are touched and the ceiling is 3 x limit. See HARNESS.md \"Why there is no within_seconds\".\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63515",
+  "sink_receiver": "http://127.0.0.1:63514",
+  "settle_seconds": 3.0,
+  "wall_clock_seconds": 8.388,
+  "sink_request_count": 6,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 5,
+    "assertions_total": 5
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "ntfy.listen.connected"
+        },
+        "match_count": 6,
+        "first_seq": 3,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ingest_response",
+          "status": 429
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "listener-flap"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "service": "ntfy.listen.connected"
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 3,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ntfy.listen.connected"
+        },
+        "match_count": 6,
+        "equals": null,
+        "min": 2,
+        "max": 6,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ntfy.listen.connected"
+        },
+        "field": "rule",
+        "match_count": 6,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836944.7668328,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "listener-flap",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836944.767591,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836944.769692,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected 0",
+      "message": "ghost ntfy.listen.connected is 0 (null)\nriemann-go: {\"rule\":\"listener-flap\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"0\",\"metric\":null,\"prior_state\":\"ok\",\"node\":\"stream/0/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-flap",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected 0\",\"message\":\"ghost ntfy.listen.connected is 0 (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-flap\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"0\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-flap\",\"owner:ops\"]}",
+      "rule": "listener-flap",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "0",
+      "metric": null,
+      "prior_state": "ok",
+      "node": "stream/0/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789836945.020876,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789836945.020967,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected 1",
+      "message": "ghost ntfy.listen.connected is 1 (null)\nriemann-go: {\"rule\":\"listener-flap\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"1\",\"metric\":null,\"prior_state\":\"0\",\"node\":\"stream/0/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-flap",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected 1\",\"message\":\"ghost ntfy.listen.connected is 1 (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-flap\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"1\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"0\\\",\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-flap\",\"owner:ops\"]}",
+      "rule": "listener-flap",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "1",
+      "metric": null,
+      "prior_state": "0",
+      "node": "stream/0/0/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789836945.278185,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789836945.533441,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 7
+    },
+    {
+      "ts": 1789836945.788619,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 8
+    },
+    {
+      "ts": 1789836946.045608,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 9
+    },
+    {
+      "ts": 1789836946.3027809,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 10
+    },
+    {
+      "ts": 1789836946.557751,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 11
+    },
+    {
+      "ts": 1789836946.8147252,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 12
+    },
+    {
+      "ts": 1789836946.814841,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected 8",
+      "message": "ghost ntfy.listen.connected is 8 (null)\nriemann-go: {\"rule\":\"listener-flap\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"8\",\"metric\":null,\"prior_state\":\"7\",\"node\":\"stream/0/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-flap",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected 8\",\"message\":\"ghost ntfy.listen.connected is 8 (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-flap\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"8\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"7\\\",\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-flap\",\"owner:ops\"]}",
+      "rule": "listener-flap",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "8",
+      "metric": null,
+      "prior_state": "7",
+      "node": "stream/0/0/0",
+      "seq": 13
+    },
+    {
+      "ts": 1789836947.069843,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 14
+    },
+    {
+      "ts": 1789836947.069929,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected 9",
+      "message": "ghost ntfy.listen.connected is 9 (null)\nriemann-go: {\"rule\":\"listener-flap\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"9\",\"metric\":null,\"prior_state\":\"8\",\"node\":\"stream/0/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-flap",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected 9\",\"message\":\"ghost ntfy.listen.connected is 9 (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-flap\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"9\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"8\\\",\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-flap\",\"owner:ops\"]}",
+      "rule": "listener-flap",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "9",
+      "metric": null,
+      "prior_state": "8",
+      "node": "stream/0/0/0",
+      "seq": 15
+    },
+    {
+      "ts": 1789836947.327477,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 16
+    },
+    {
+      "ts": 1789836947.584539,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 17
+    },
+    {
+      "ts": 1789836947.8409479,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 18
+    },
+    {
+      "ts": 1789836948.1051059,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 19
+    },
+    {
+      "ts": 1789836948.3587499,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 20
+    },
+    {
+      "ts": 1789836948.6113532,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 21
+    },
+    {
+      "ts": 1789836948.876589,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 22
+    },
+    {
+      "ts": 1789836948.877082,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected 16",
+      "message": "ghost ntfy.listen.connected is 16 (null)\nriemann-go: {\"rule\":\"listener-flap\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"16\",\"metric\":null,\"prior_state\":\"15\",\"node\":\"stream/0/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-flap",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected 16\",\"message\":\"ghost ntfy.listen.connected is 16 (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-flap\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"16\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"15\\\",\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-flap\",\"owner:ops\"]}",
+      "rule": "listener-flap",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "16",
+      "metric": null,
+      "prior_state": "15",
+      "node": "stream/0/0/0",
+      "seq": 23
+    },
+    {
+      "ts": 1789836949.1323662,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 24
+    },
+    {
+      "ts": 1789836949.132465,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.connected 17",
+      "message": "ghost ntfy.listen.connected is 17 (null)\nriemann-go: {\"rule\":\"listener-flap\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.connected\",\"state\":\"17\",\"metric\":null,\"prior_state\":\"16\",\"node\":\"stream/0/0/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-flap",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.connected 17\",\"message\":\"ghost ntfy.listen.connected is 17 (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-flap\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.connected\\\",\\\"state\\\":\\\"17\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"16\\\",\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-flap\",\"owner:ops\"]}",
+      "rule": "listener-flap",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.connected",
+      "state": "17",
+      "metric": null,
+      "prior_state": "16",
+      "node": "stream/0/0/0",
+      "seq": 25
+    },
+    {
+      "ts": 1789836949.3857112,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 26
+    },
+    {
+      "ts": 1789836949.64204,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 27
+    },
+    {
+      "ts": 1789836952.937397,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "listener-flap",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 28
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:55:44 riemannd listening on 127.0.0.1:63515 with 8 partitions\n"
+}

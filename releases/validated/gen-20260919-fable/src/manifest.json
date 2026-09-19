@@ -1,0 +1,7 @@
+{
+  "spec_sha": "7227a0ae74795093d6e39dc02c1e3a9d2b3219e6",
+  "prompt_sha": "3467508c227214ef954767b19f7fd863bc6da73e78afaab574938c7653470dbe",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-09-19T02:52:11Z",
+  "note": "Input-reproducible, not output-reproducible: these pins fix the inputs to a sampled model, not the artifact."
+}

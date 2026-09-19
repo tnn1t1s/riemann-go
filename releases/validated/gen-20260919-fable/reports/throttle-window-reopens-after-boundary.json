@@ -1,0 +1,328 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/throttle-window-reopens-after-boundary.yaml",
+  "scenario_name": "throttle-window-reopens-after-boundary",
+  "scenario_description": "Source: upstream `throttle-test` in riemann/test/riemann/streams_test.clj, translated, and SEMANTICS.md `throttle` (\"Timing\" and the first two edge cases). Asserts SPEC.md property 9 across a window boundary rather than within one window.\nThe development corpus's `throttle-bounds-alerts` bounds the total count over a run and asserts nothing about which events pass. That passes against an implementation whose window never closes, as long as the ceiling is above `limit`. This scenario names the individual events instead: the first two of a burst pass, the rest of that burst are discarded rather than deferred, and a second burst after the window has closed gets a fresh allowance.\nEvery event carries a distinct `metric`, so each assertion is about one specific event rather than about a total.\nThe result is the same under the per-key window SEMANTICS.md states and under the sliding window SPEC.md property 9 reads as, which is deliberate: open question 2 is unresolved and this scenario must not depend on its answer.\nExpected wall clock: about 3.2 s of stimulus plus a 4 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63556",
+  "sink_receiver": "http://127.0.0.1:63555",
+  "settle_seconds": 4.0,
+  "wall_clock_seconds": 7.619,
+  "sink_request_count": 4,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 10,
+    "assertions_total": 10
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "flap.probe",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "flap.probe",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "flap.probe",
+          "metric": 5
+        },
+        "match_count": 1,
+        "first_seq": 9,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "flap.probe",
+          "metric": 6
+        },
+        "match_count": 1,
+        "first_seq": 11,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 3
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 4
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 7
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ntfy_post",
+          "metric": 2
+        },
+        "after": {
+          "event": "ntfy_post",
+          "metric": 5
+        },
+        "before_first_seq": 5,
+        "after_first_seq": 9,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "flap.probe"
+        },
+        "match_count": 4,
+        "equals": 4,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "flap.probe"
+        },
+        "field": "node",
+        "match_count": 4,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836954.345628,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "burst-bound",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836954.349706,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836954.363067,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost flap.probe s1",
+      "message": "ghost flap.probe is s1 (1)\nriemann-go: {\"rule\":\"burst-bound\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"flap.probe\",\"state\":\"s1\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:burst-bound",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost flap.probe s1\",\"message\":\"ghost flap.probe is s1 (1)\\nriemann-go: {\\\"rule\\\":\\\"burst-bound\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"flap.probe\\\",\\\"state\\\":\\\"s1\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":3,\"tags\":[\"rule:burst-bound\",\"owner:arena\"]}",
+      "rule": "burst-bound",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "flap.probe",
+      "state": "s1",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789836954.552126,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789836954.5522351,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost flap.probe s2",
+      "message": "ghost flap.probe is s2 (2)\nriemann-go: {\"rule\":\"burst-bound\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"flap.probe\",\"state\":\"s2\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:burst-bound",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost flap.probe s2\",\"message\":\"ghost flap.probe is s2 (2)\\nriemann-go: {\\\"rule\\\":\\\"burst-bound\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"flap.probe\\\",\\\"state\\\":\\\"s2\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":3,\"tags\":[\"rule:burst-bound\",\"owner:arena\"]}",
+      "rule": "burst-bound",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "flap.probe",
+      "state": "s2",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789836954.7575328,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789836954.948555,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 7
+    },
+    {
+      "ts": 1789836957.1502059,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 8
+    },
+    {
+      "ts": 1789836957.1503518,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost flap.probe s5",
+      "message": "ghost flap.probe is s5 (5)\nriemann-go: {\"rule\":\"burst-bound\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"flap.probe\",\"state\":\"s5\",\"metric\":5,\"prior_state\":null,\"node\":\"stream/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:burst-bound",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost flap.probe s5\",\"message\":\"ghost flap.probe is s5 (5)\\nriemann-go: {\\\"rule\\\":\\\"burst-bound\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"flap.probe\\\",\\\"state\\\":\\\"s5\\\",\\\"metric\\\":5,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":3,\"tags\":[\"rule:burst-bound\",\"owner:arena\"]}",
+      "rule": "burst-bound",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "flap.probe",
+      "state": "s5",
+      "metric": 5,
+      "prior_state": null,
+      "node": "stream/0",
+      "seq": 9
+    },
+    {
+      "ts": 1789836957.3486452,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 10
+    },
+    {
+      "ts": 1789836957.34875,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost flap.probe s6",
+      "message": "ghost flap.probe is s6 (6)\nriemann-go: {\"rule\":\"burst-bound\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"flap.probe\",\"state\":\"s6\",\"metric\":6,\"prior_state\":null,\"node\":\"stream/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:burst-bound",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost flap.probe s6\",\"message\":\"ghost flap.probe is s6 (6)\\nriemann-go: {\\\"rule\\\":\\\"burst-bound\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"flap.probe\\\",\\\"state\\\":\\\"s6\\\",\\\"metric\\\":6,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":3,\"tags\":[\"rule:burst-bound\",\"owner:arena\"]}",
+      "rule": "burst-bound",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "flap.probe",
+      "state": "s6",
+      "metric": 6,
+      "prior_state": null,
+      "node": "stream/0",
+      "seq": 11
+    },
+    {
+      "ts": 1789836957.550412,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 12
+    },
+    {
+      "ts": 1789836961.567026,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "burst-bound",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 13
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:55:54 riemannd listening on 127.0.0.1:63556 with 8 partitions\n"
+}

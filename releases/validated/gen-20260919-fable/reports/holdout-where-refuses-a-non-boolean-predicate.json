@@ -1,0 +1,260 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/where-refuses-a-non-boolean-predicate.yaml",
+  "scenario_name": "where-refuses-a-non-boolean-predicate",
+  "scenario_description": "Source: upstream `where-test` \"return value\" and `where*-test`, both of which establish that upstream's `where` treats any truthy value as a match: `((where 2) :wheeee!)` returns 2 and `(where metric)` passes every event carrying a non-nil metric. SEMANTICS.md `where`, first edge case, states the riemann-go behavior and the reason: a `where` expression whose type is not boolean fails to compile, which is a 400 at `PUT`, and it is not a truthiness coercion at evaluation time. \"A predicate that is accidentally a projection fires on everything, and that is the failure mode hardest to notice once a rule is live.\"\nSo this is the same upstream case with the verdict inverted. Upstream asserts the coercion happens; riemann-go asserts it is refused before the rule can ever run.\nThe rejection is asserted at the rule surface rather than at the oracle, which HARNESS.md's trace vocabulary allows for rule registration, and the consequence is asserted at the oracle: the rejected rule never posts. Both halves are needed. A generation that returns 400 and installs the rule anyway fails the silence, and one that installs the rule and simply never fires it passes the silence for the wrong reason.\nThe second rejected rule is the closed-world statement from SPEC.md's expression language: an unknown top-level name is a compile error at `PUT`, rather than a rule that silently never fires. It shares this scenario because it is the same discipline, and it carries its own rule id so a failure says which half broke.\n`live-control` is here so the silence is provable. Without it, an implementation that dropped every event on the floor would satisfy both not_contains clauses.\nWrong implementations this catch: upstream's truthiness coercion ported directly, which posts an extra alert per event from `truthy-where`; a `PUT` that accepts any expression that parses and defers the type error to evaluation; an expression engine with an open name domain, where `bogus_name` reads as null and the rule compiles.\nEvery event carries a metric, so the scenario never depends on SEMANTICS.md Open question 1, the reading of `metric` on an event that carries none.\nExpected wall clock: about 1.4 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63950",
+  "sink_receiver": "http://127.0.0.1:63949",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 6.422,
+  "sink_request_count": 2,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 10,
+    "assertions_total": 10
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "truthy-where",
+          "status": 400
+        },
+        "match_count": 1,
+        "first_seq": 2,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "open-world-where",
+          "status": 400
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "live-control",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "live-control",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 7,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "truthy-where"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "open-world-where"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "truthy-where"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "rule": "live-control"
+        },
+        "before_first_seq": 2,
+        "after_first_seq": 5,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "live-control"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "live-control"
+        },
+        "field": "node",
+        "match_count": 2,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837078.164362,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "live-control",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837078.164948,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "truthy-where",
+      "status": 400,
+      "version": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789837078.473867,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "open-world-where",
+      "status": 400,
+      "version": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789837079.173354,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789837079.1747708,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost pred.probe ok",
+      "message": "ghost pred.probe is ok (1)\nriemann-go: {\"rule\":\"live-control\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"pred.probe\",\"state\":\"ok\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:live-control",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost pred.probe ok\",\"message\":\"ghost pred.probe is ok (1)\\nriemann-go: {\\\"rule\\\":\\\"live-control\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"pred.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":2,\"tags\":[\"rule:live-control\",\"owner:arena\"]}",
+      "rule": "live-control",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "pred.probe",
+      "state": "ok",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789837079.5702138,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789837079.570349,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost pred.probe ok",
+      "message": "ghost pred.probe is ok (2)\nriemann-go: {\"rule\":\"live-control\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"pred.probe\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:live-control",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost pred.probe ok\",\"message\":\"ghost pred.probe is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"live-control\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"pred.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0\\\"}\",\"priority\":2,\"tags\":[\"rule:live-control\",\"owner:arena\"]}",
+      "rule": "live-control",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "pred.probe",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/0",
+      "seq": 7
+    },
+    {
+      "ts": 1789837084.5798268,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "live-control",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 8
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:58 riemannd listening on 127.0.0.1:63950 with 8 partitions\n"
+}

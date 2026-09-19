@@ -1,0 +1,357 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/splitp-takes-the-first-branch-only.yaml",
+  "scenario_name": "splitp-takes-the-first-branch-only",
+  "scenario_description": "Source: upstream `split-test`, `split*-test` and `splitp-test` in riemann/test/riemann/streams_test.clj, which are the same dispatch written three ways. All three drive metrics 15, 8 and 2 through two thresholds and a default, and all three expect exactly one labelled event per input: 15 critical, 8 warning, 2 ok. This is that case in riemann-go's `splitp`.\nUpstream writes the comparison into the form, as `(> metric 10)` or `(splitp <= metric 10 ...)`. SPEC.md instead puts a `{}` placeholder in the node's `test` and substitutes each branch's `threshold`, so the comparison and its direction live in one string the rule author writes. `metric >= {}` with thresholds 10 and 5 is upstream's `splitp <=` reversed, which is the same predicate.\nA branch entry is an object with exactly two keys, `threshold` and `stream`, and `otherwise` holds a subtree directly, per SPEC.md's combinator table. The `stream` key contributes no segment of its own to the node path, so the sink inside the first branch is entry 0 of that branch's `set` node children and its path is `stream/branches/0/0`.\nDropped from the port: the \"Without a default\" halves. Upstream's `splitp` throws and its `split*` silently drops in exactly the same situation, and SEMANTICS.md Open question 3 records that riemann-go has not chosen between them. A scenario asserting either answer would be asserting a decision nobody has made.\nThe node path is asserted by exact value on two of the three posts rather than by presence. SPEC.md's \"Node paths\" section makes the path mechanical precisely so a scenario can do this, and no scenario in this directory does. Every other held-out scenario only requires the field to exist, which passes against a path built by any rule at all.\nWrong implementations this catches: branches evaluated in threshold order rather than array order, or evaluated all at once and the loosest taken, either of which sends metric 15 to the warning branch; a `splitp` that delivers the event to every branch whose test holds, which gives five posts instead of three; an `otherwise` that is reached even when a branch matched, which gives four; a node path that numbers a branch by its threshold or omits the `branches` segment.\nExpected wall clock: about 1 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63822",
+  "sink_receiver": "http://127.0.0.1:63821",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 6.031,
+  "sink_request_count": 3,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 18,
+    "assertions_total": 18
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 15,
+          "state": "critical"
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 8,
+          "state": "warning"
+        },
+        "match_count": 1,
+        "first_seq": 5,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 2,
+          "state": "ok"
+        },
+        "match_count": 1,
+        "first_seq": 7,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 15,
+          "node": "stream/branches/0/0"
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 2,
+          "node": "stream/otherwise/0"
+        },
+        "match_count": 1,
+        "first_seq": 7,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 15,
+          "state": "warning"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 15,
+          "state": "ok"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 8,
+          "state": "critical"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 8,
+          "state": "ok"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 2,
+          "state": "warning"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 5,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 2,
+          "state": "critical"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 6,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "raw"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ntfy_post",
+          "metric": 15
+        },
+        "after": {
+          "event": "ntfy_post",
+          "metric": 2
+        },
+        "before_first_seq": 3,
+        "after_first_seq": 7,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "dispatch"
+        },
+        "match_count": 3,
+        "equals": 3,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "critical"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "warning"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "ok"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "metric": 8
+        },
+        "field": "node",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837042.470958,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "dispatch",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837042.4716601,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789837042.471884,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost split.probe critical",
+      "message": "ghost split.probe is critical (15)\nriemann-go: {\"rule\":\"dispatch\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"split.probe\",\"state\":\"critical\",\"metric\":15,\"prior_state\":null,\"node\":\"stream/branches/0/0\"}",
+      "priority": 5,
+      "tags": [
+        "rule:dispatch",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost split.probe critical\",\"message\":\"ghost split.probe is critical (15)\\nriemann-go: {\\\"rule\\\":\\\"dispatch\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"split.probe\\\",\\\"state\\\":\\\"critical\\\",\\\"metric\\\":15,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/branches/0/0\\\"}\",\"priority\":5,\"tags\":[\"rule:dispatch\",\"owner:arena\"]}",
+      "rule": "dispatch",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "split.probe",
+      "state": "critical",
+      "metric": 15,
+      "prior_state": null,
+      "node": "stream/branches/0/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789837042.976089,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 4
+    },
+    {
+      "ts": 1789837042.976198,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost split.probe warning",
+      "message": "ghost split.probe is warning (8)\nriemann-go: {\"rule\":\"dispatch\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"split.probe\",\"state\":\"warning\",\"metric\":8,\"prior_state\":null,\"node\":\"stream/branches/1/0\"}",
+      "priority": 4,
+      "tags": [
+        "rule:dispatch",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost split.probe warning\",\"message\":\"ghost split.probe is warning (8)\\nriemann-go: {\\\"rule\\\":\\\"dispatch\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"split.probe\\\",\\\"state\\\":\\\"warning\\\",\\\"metric\\\":8,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/branches/1/0\\\"}\",\"priority\":4,\"tags\":[\"rule:dispatch\",\"owner:arena\"]}",
+      "rule": "dispatch",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "split.probe",
+      "state": "warning",
+      "metric": 8,
+      "prior_state": null,
+      "node": "stream/branches/1/0",
+      "seq": 5
+    },
+    {
+      "ts": 1789837043.479319,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 6
+    },
+    {
+      "ts": 1789837043.479501,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost split.probe ok",
+      "message": "ghost split.probe is ok (2)\nriemann-go: {\"rule\":\"dispatch\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"split.probe\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/otherwise/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:dispatch",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost split.probe ok\",\"message\":\"ghost split.probe is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"dispatch\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"split.probe\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/otherwise/0\\\"}\",\"priority\":2,\"tags\":[\"rule:dispatch\",\"owner:arena\"]}",
+      "rule": "dispatch",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "split.probe",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/otherwise/0",
+      "seq": 7
+    },
+    {
+      "ts": 1789837048.4935381,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "dispatch",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 8
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:22 riemannd listening on 127.0.0.1:63822 with 8 partitions\n"
+}

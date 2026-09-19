@@ -1,0 +1,154 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/expiry-becomes-event.yaml",
+  "scenario_name": "expiry-becomes-event",
+  "scenario_description": "An index entry whose time + ttl has passed produces an event with host and service kept and state `expired`, delivered to rules like any other event. SPEC.md property 4, carried from src/riemann/core.clj:274-308.\nThis is the scenario that makes the index observable through the oracle at all. Nothing else in the corpus proves the index exists: without expiry, an index that dropped every entry on insert would still pass every other scenario here.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63392",
+  "sink_receiver": "http://127.0.0.1:63391",
+  "settle_seconds": 8.0,
+  "wall_clock_seconds": 8.223,
+  "sink_request_count": 1,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 5,
+    "assertions_total": 5
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "ntfy.listen.up",
+          "state": "expired"
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "host": "ghost",
+          "service": "ntfy.listen.up",
+          "state": "ok"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "ingest_response",
+          "status": 202
+        },
+        "after": {
+          "event": "ntfy_post",
+          "state": "expired"
+        },
+        "before_first_seq": 2,
+        "after_first_seq": 3,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "ntfy.listen.up"
+        },
+        "match_count": 1,
+        "equals": 1,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "state": "expired"
+        },
+        "field": "prior_state",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789836914.056289,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "listener-up",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789836914.058485,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1789836916.081492,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost ntfy.listen.up expired",
+      "message": "ghost ntfy.listen.up is expired (null)\nriemann-go: {\"rule\":\"listener-up\",\"version\":1,\"owner\":\"ops\",\"host\":\"ghost\",\"service\":\"ntfy.listen.up\",\"state\":\"expired\",\"metric\":null,\"prior_state\":\"ok\",\"node\":\"stream/1/0\"}",
+      "priority": 3,
+      "tags": [
+        "rule:listener-up",
+        "owner:ops"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost ntfy.listen.up expired\",\"message\":\"ghost ntfy.listen.up is expired (null)\\nriemann-go: {\\\"rule\\\":\\\"listener-up\\\",\\\"version\\\":1,\\\"owner\\\":\\\"ops\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"ntfy.listen.up\\\",\\\"state\\\":\\\"expired\\\",\\\"metric\\\":null,\\\"prior_state\\\":\\\"ok\\\",\\\"node\\\":\\\"stream/1/0\\\"}\",\"priority\":3,\"tags\":[\"rule:listener-up\",\"owner:ops\"]}",
+      "rule": "listener-up",
+      "version": 1,
+      "owner": "ops",
+      "host": "ghost",
+      "service": "ntfy.listen.up",
+      "state": "expired",
+      "metric": null,
+      "prior_state": "ok",
+      "node": "stream/1/0",
+      "seq": 3
+    },
+    {
+      "ts": 1789836922.066654,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "listener-up",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 4
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:55:13 riemannd listening on 127.0.0.1:63392 with 8 partitions\n"
+}

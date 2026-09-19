@@ -1,0 +1,481 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/holdout/where-partitions-with-no-else.yaml",
+  "scenario_name": "where-partitions-with-no-else",
+  "scenario_description": "Source: upstream `where-test` in riemann/test/riemann/streams_test.clj, the \"else\", \"regex\" and \"tagged-all (multiple tags)\" cases. Adjusted, because SEMANTICS.md \"Downstream\" says riemann-go has no else clause and an author who wants one writes a second `where` with the negated expression. This scenario is that construction, and it asserts the partition is exact: every event lands in exactly one of the two siblings.\nUpstream drives services \"cat\", \"dog\", nil and \"badger\" through `(where (service #\"a\") ... (else ...))` and expects cat and badger on one side, dog and nil on the other. The nil service has no riemann-go equivalent, since `SPEC.md` property 3 rejects an event with no service at ingest, so it is replaced by \"kitten\", taken from the same test's \"variable\" case, which is a service that simply does not match.\n`=~` becomes `matches`, which `SPEC.md`'s expression language states is RE2 and unanchored. \"badger\" contains an \"a\" but does not begin with one, so an implementation that anchors the pattern sends it to the wrong sibling.\nThe second rule ports the tagged-all case: upstream's `(tagged [\"foo\" \"bar\"])` requires every named tag, and riemann-go spells that as a conjunction of two `tagged` calls, because `SPEC.md` gives `tagged` one name per call.\nWrong implementations this catches: a `where` with an implicit else that delivers a non-matching event to its children anyway (the miss count rises above two and every event alerts twice); a `where` that passes everything downstream (four hits instead of two); an anchored `matches` (badger becomes a miss); a `tagged` conjunction that reads as any-of rather than all-of (cat and badger alert on the tag rule).\nExpected wall clock: about 1.2 s of stimulus plus a 5 s settle.\n",
+  "binary": "scratch/gen-tri-fable/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:63934",
+  "sink_receiver": "http://127.0.0.1:63933",
+  "settle_seconds": 5.0,
+  "wall_clock_seconds": 6.243,
+  "sink_request_count": 6,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 1.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 20,
+    "assertions_total": 20
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.hit",
+          "metric": 1
+        },
+        "match_count": 1,
+        "first_seq": 4,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.hit",
+          "metric": 3
+        },
+        "match_count": 1,
+        "first_seq": 9,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.miss",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 7,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.miss",
+          "metric": 4
+        },
+        "match_count": 1,
+        "first_seq": 12,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.bothtags",
+          "metric": 2
+        },
+        "match_count": 1,
+        "first_seq": 6,
+        "ok": true
+      },
+      {
+        "index": 5,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.bothtags",
+          "metric": 4
+        },
+        "match_count": 1,
+        "first_seq": 11,
+        "ok": true
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.hit",
+          "metric": 2
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.hit",
+          "metric": 4
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.miss",
+          "metric": 1
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.miss",
+          "metric": 3
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 4,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.bothtags",
+          "metric": 1
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 5,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.bothtags",
+          "metric": 3
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 6,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "cat"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 7,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "dog"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [
+      {
+        "index": 0,
+        "before": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "where-split"
+        },
+        "after": {
+          "event": "ntfy_post",
+          "service": "w.hit",
+          "metric": 1
+        },
+        "before_first_seq": 1,
+        "after_first_seq": 4,
+        "ok": true,
+        "reason": null
+      }
+    ],
+    "count": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "where-split"
+        },
+        "match_count": 4,
+        "equals": 4,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.hit"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 2,
+        "pattern": {
+          "event": "ntfy_post",
+          "service": "w.miss"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      },
+      {
+        "index": 3,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "where-all-tags"
+        },
+        "match_count": 2,
+        "equals": 2,
+        "min": null,
+        "max": null,
+        "ok": true
+      }
+    ],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "where-split"
+        },
+        "field": "node",
+        "match_count": 4,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1789837071.508159,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "where-split",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1789837071.5090282,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "where-all-tags",
+      "status": 201,
+      "version": 1,
+      "seq": 2
+    },
+    {
+      "ts": 1789837071.509716,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 3
+    },
+    {
+      "ts": 1789837071.510806,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost w.hit ok",
+      "message": "ghost w.hit is ok (1)\nriemann-go: {\"rule\":\"where-split\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"w.hit\",\"state\":\"ok\",\"metric\":1,\"prior_state\":null,\"node\":\"stream/0/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:where-split",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost w.hit ok\",\"message\":\"ghost w.hit is ok (1)\\nriemann-go: {\\\"rule\\\":\\\"where-split\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"w.hit\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":1,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:where-split\",\"owner:arena\"]}",
+      "rule": "where-split",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "w.hit",
+      "state": "ok",
+      "metric": 1,
+      "prior_state": null,
+      "node": "stream/0/0/0",
+      "seq": 4
+    },
+    {
+      "ts": 1789837071.917939,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 5
+    },
+    {
+      "ts": 1789837071.9181461,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost w.bothtags ok",
+      "message": "ghost w.bothtags is ok (2)\nriemann-go: {\"rule\":\"where-all-tags\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"w.bothtags\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:where-all-tags",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost w.bothtags ok\",\"message\":\"ghost w.bothtags is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"where-all-tags\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"w.bothtags\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:where-all-tags\",\"owner:arena\"]}",
+      "rule": "where-all-tags",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "w.bothtags",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 6
+    },
+    {
+      "ts": 1789837071.918495,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost w.miss ok",
+      "message": "ghost w.miss is ok (2)\nriemann-go: {\"rule\":\"where-split\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"w.miss\",\"state\":\"ok\",\"metric\":2,\"prior_state\":null,\"node\":\"stream/1/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:where-split",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost w.miss ok\",\"message\":\"ghost w.miss is ok (2)\\nriemann-go: {\\\"rule\\\":\\\"where-split\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"w.miss\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":2,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/1/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:where-split\",\"owner:arena\"]}",
+      "rule": "where-split",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "w.miss",
+      "state": "ok",
+      "metric": 2,
+      "prior_state": null,
+      "node": "stream/1/0/0",
+      "seq": 7
+    },
+    {
+      "ts": 1789837072.3115048,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 8
+    },
+    {
+      "ts": 1789837072.311589,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost w.hit ok",
+      "message": "ghost w.hit is ok (3)\nriemann-go: {\"rule\":\"where-split\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"w.hit\",\"state\":\"ok\",\"metric\":3,\"prior_state\":null,\"node\":\"stream/0/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:where-split",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost w.hit ok\",\"message\":\"ghost w.hit is ok (3)\\nriemann-go: {\\\"rule\\\":\\\"where-split\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"w.hit\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":3,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:where-split\",\"owner:arena\"]}",
+      "rule": "where-split",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "w.hit",
+      "state": "ok",
+      "metric": 3,
+      "prior_state": null,
+      "node": "stream/0/0/0",
+      "seq": 9
+    },
+    {
+      "ts": 1789837072.7170718,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 10
+    },
+    {
+      "ts": 1789837072.717197,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost w.bothtags ok",
+      "message": "ghost w.bothtags is ok (4)\nriemann-go: {\"rule\":\"where-all-tags\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"w.bothtags\",\"state\":\"ok\",\"metric\":4,\"prior_state\":null,\"node\":\"stream/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:where-all-tags",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost w.bothtags ok\",\"message\":\"ghost w.bothtags is ok (4)\\nriemann-go: {\\\"rule\\\":\\\"where-all-tags\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"w.bothtags\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":4,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:where-all-tags\",\"owner:arena\"]}",
+      "rule": "where-all-tags",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "w.bothtags",
+      "state": "ok",
+      "metric": 4,
+      "prior_state": null,
+      "node": "stream/0/0",
+      "seq": 11
+    },
+    {
+      "ts": 1789837072.7175329,
+      "source": "sink-receiver",
+      "event": "ntfy_post",
+      "topic": "arena",
+      "title": "ghost w.miss ok",
+      "message": "ghost w.miss is ok (4)\nriemann-go: {\"rule\":\"where-split\",\"version\":1,\"owner\":\"arena\",\"host\":\"ghost\",\"service\":\"w.miss\",\"state\":\"ok\",\"metric\":4,\"prior_state\":null,\"node\":\"stream/1/0/0\"}",
+      "priority": 2,
+      "tags": [
+        "rule:where-split",
+        "owner:arena"
+      ],
+      "raw": "{\"topic\":\"arena\",\"title\":\"ghost w.miss ok\",\"message\":\"ghost w.miss is ok (4)\\nriemann-go: {\\\"rule\\\":\\\"where-split\\\",\\\"version\\\":1,\\\"owner\\\":\\\"arena\\\",\\\"host\\\":\\\"ghost\\\",\\\"service\\\":\\\"w.miss\\\",\\\"state\\\":\\\"ok\\\",\\\"metric\\\":4,\\\"prior_state\\\":null,\\\"node\\\":\\\"stream/1/0/0\\\"}\",\"priority\":2,\"tags\":[\"rule:where-split\",\"owner:arena\"]}",
+      "rule": "where-split",
+      "version": 1,
+      "owner": "arena",
+      "host": "ghost",
+      "service": "w.miss",
+      "state": "ok",
+      "metric": 4,
+      "prior_state": null,
+      "node": "stream/1/0/0",
+      "seq": 12
+    },
+    {
+      "ts": 1789837077.737238,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "where-split",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 13
+    },
+    {
+      "ts": 1789837077.739297,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "where-all-tags",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 14
+    }
+  ],
+  "riemannd_log_tail": "2026/09/19 12:57:51 riemannd listening on 127.0.0.1:63934 with 8 partitions\n"
+}
