@@ -45,10 +45,24 @@ The spec is deliberately open about the internals, and its implementation guidan
 Pick the simplest thing that satisfies the spec and the invariants. Where the spec is silent on a decision you must make anyway, make it and mark it:
 
 ```go
-// SPEC-GAP: <one line saying what the spec left open and what you chose>
+// SPEC-GAP: <what the spec left open, and what you chose>
+// SPEC-FREE: <a choice the spec hands you on purpose, and what you chose>
 ```
 
-Every such decision gets one. These comments are harvested into the next spec revision, so they are the most valuable thing you produce after the code itself.
+Use `SPEC-GAP` when the spec is silent and you had to decide anyway, and
+`SPEC-FREE` when the spec says the choice is yours: the package layout, the
+concurrency model inside a partition, the index structure, the timer
+mechanism, the ring's representation.
+
+The distinction is what makes the count mean something. A recurring `SPEC-GAP`
+is a hole in the spec that two generations could fill differently, and the aim
+is to have none left. A `SPEC-FREE` is the spec working as intended, and
+driving those to zero would over-specify the program and remove the design
+room deliberately left in it.
+
+Both are harvested across generations and clustered, so a silence that several
+generations name independently is the one that gets fixed. These comments are
+the most valuable thing you produce after the code itself.
 
 ## Your role and its boundaries
 

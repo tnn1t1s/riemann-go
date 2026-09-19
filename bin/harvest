@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Harvest the decision notes generations leave behind, and report which
+# silences recur across independent generations.
+#
+# Usage:
+#   bin/harvest [dir ...]        default: every generation under scratch/ and
+#                                releases/candidates/
+#   bin/harvest --raw [dir ...]  print the extracted notes, no clustering
+#   bin/harvest --help
+#
+# Why recurrence rather than a count. The note count tracks how diligent a
+# model is and how much surface the spec has, not how good the spec is: across
+# five generations it ran 11, 19, 19, 22, 36 while the spec was improving, and
+# the weakest artifact of the five wrote zero. A silence named independently by
+# three generations is a real hole in the spec. One named once is that
+# generation's idiosyncrasy and is usually best left alone.
+#
+# Extraction is mechanical. Clustering is not: deciding that two differently
+# worded notes are the same silence is a judgment about meaning, so it is a
+# model call rather than a keyword match. The model here is cheap and the job
+# is small; set HARVEST_MODEL to change it.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+HARVEST_MODEL="${HARVEST_MODEL:-claude-haiku-4-5-20251001}"
+
+usage() { sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+RAW=0
+case "${1:-}" in
+  --help|-h) usage; exit 0 ;;
+  --raw)     RAW=1; shift ;;
+esac
+
+DIRS=("$@")
+if [ "${#DIRS[@]}" -eq 0 ]; then
+  while IFS= read -r d; do DIRS+=("$d"); done < <(
+    find "$REPO_DIR/scratch" "$REPO_DIR/releases/candidates" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort
+  )
+fi
+if [ "${#DIRS[@]}" -eq 0 ]; then
+  echo "bin/harvest: no generation directories found; pass one explicitly" >&2
+  exit 2
+fi
+
+NOTES="$(mktemp)"
+trap 'rm -f "$NOTES"' EXIT
+
+# A note is the marker line plus any comment lines continuing it. Both markers
+# are collected: SPEC-GAP is a silence the generator had to fill, SPEC-FREE is
+# a freedom it exercised on purpose. Only SPEC-GAP recurrence is a defect.
+for d in "${DIRS[@]}"; do
+  [ -d "$d" ] || continue
+  gen="$(basename "$d")"
+  find "$d" -name '*.go' -type f 2>/dev/null | sort | while IFS= read -r f; do
+    awk -v gen="$gen" -v file="${f#"$d/"}" '
+      /SPEC-(GAP|FREE):/ {
+        kind = /SPEC-FREE:/ ? "FREE" : "GAP"
+        sub(/.*SPEC-(GAP|FREE): */, "")
+        note = $0; collecting = 1; next
+      }
+      collecting {
+        line = $0
+        sub(/^[ \t]*/, "", line)
+        if (line ~ /^\/\//) { sub(/^\/\/ ?/, "", line); note = note " " line; next }
+        print gen "\t" kind "\t" file "\t" note; collecting = 0
+      }
+      END { if (collecting) print gen "\t" kind "\t" file "\t" note }
+    ' "$f"
+  done
+done > "$NOTES"
+
+TOTAL=$(wc -l < "$NOTES" | tr -d ' ')
+GENS=$(cut -f1 "$NOTES" | sort -u | wc -l | tr -d ' ')
+if [ "$TOTAL" -eq 0 ]; then
+  echo "No decision notes found in ${#DIRS[@]} directories."
+  echo "Zero notes is not a clean bill of health: the weakest generation so far wrote zero."
+  exit 0
+fi
+
+if [ "$RAW" -eq 1 ]; then
+  cat "$NOTES"
+  exit 0
+fi
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "bin/harvest: 'claude' not on PATH; clustering needs it. Use --raw for the notes." >&2
+  exit 2
+fi
+
+echo "Harvested $TOTAL notes from $GENS generations. Clustering with $HARVEST_MODEL..." >&2
+echo >&2
+
+PROMPT="$(cat <<'EOP'
+Below are decision notes left in generated Go by several independent
+generations of one program, produced from the same specification. Each line is
+tab-separated: generation, kind, file, note. Kind GAP means the specification
+was silent and the generator had to choose. Kind FREE means the specification
+deliberately left the choice open.
+
+Group the notes into topics by what decision they are about, not by wording.
+Two notes belong together when a specification edit would resolve both.
+
+Then output exactly two things and nothing else.
+
+First, a markdown table of GAP topics, sorted by how many distinct generations
+named the topic, highest first. Columns: Topic, Generations (count), Which
+(comma-separated generation names, shortened), Consequence. Consequence is one
+short clause saying what could differ observably between two generations that
+resolved this topic differently, or "cosmetic" when nothing observable differs.
+
+Second, under a heading "FREE topics", a plain list of the FREE topics with the
+count of generations that named each. No commentary.
+
+Judge by meaning. Notes worded very differently may be the same decision, and
+notes sharing vocabulary may be different decisions.
+EOP
+)"
+
+claude -p "$PROMPT
+
+$(cat "$NOTES")" --model "$HARVEST_MODEL" --allowedTools "" 2>/dev/null || {
+  echo "bin/harvest: clustering failed; the raw notes are still available with --raw" >&2
+  exit 1
+}

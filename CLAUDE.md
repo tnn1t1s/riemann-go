@@ -77,6 +77,35 @@ The upstream Clojure suite at `~/Developer/riemann/test/riemann/streams_test.clj
 
 "Port another combinator test as a scenario" is always an available move. Reach for it whenever a diagnosis says the evidence does not discriminate, whenever a property has been argued about twice without a check existing for it, and whenever the corpus is green but you do not believe it. `changed-state`, `stable`, `coalesce`, `throttle`, `rollup`, `batch`, both `ddt` forms, `rate` and `ewma` are the ones whose semantics are least obvious and therefore most worth having in the corpus. `exception-stream`, `execute-on`, `pipe`, `by-builder` and `sdo` are Clojure surface and are not being kept, so do not port those.
 
+## Refining the spec from what generations had to guess
+
+`bin/harvest` collects every `SPEC-GAP` and `SPEC-FREE` note across generations
+and clusters them, reporting which silences several generations named
+independently. That table, not a reading of one tree, is what drives a spec
+edit.
+
+Recurrence is the signal. The raw note count is not: across five generations it
+ran 11, 19, 19, 22, 36 while the spec was getting better, because the count
+tracks how diligent a model is and how much surface the spec has. The weakest
+generation of the five wrote zero notes and failed every scenario, so zero is
+not a clean bill of health either.
+
+Read the table this way. A `SPEC-GAP` named by three or more generations is a
+hole: two generations could fill it differently and something observable would
+change. Fix those. One named once is usually that generation's idiosyncrasy;
+leave it. A topic whose consequence is cosmetic can wait behind one that
+changes behavior. `SPEC-FREE` topics are the spec working as intended, and
+driving them to zero would over-specify the program and remove design room on
+purpose left in it.
+
+The expensive-model-refines, cheap-model-produces split works on this basis: a
+more capable model writes more and better notes, so it is the better instrument
+for finding silences, while any capable model can produce a conforming artifact
+once the silences are closed. Two cautions. Note volume is a property of the
+model as much as of the spec, so counts are comparable only within one model.
+And the lagging measure of whether the spec actually generalises is the
+held-out pass rate, not the note table.
+
 ## The held-out set
 
 `scenarios/holdout/` runs at promotion and never during development. You do not read its assertions, its failures or its traces while deciding what a specification document should say. `scenarios/holdout/README.md` has the rules; the short version is that the thing which overfits here is the spec, so a corpus that drives every spec edit cannot also be the evidence that the spec generalises.
