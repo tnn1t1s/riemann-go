@@ -1,0 +1,13 @@
+{
+  "spec_sha": "79dd9b14ff55facffc598502ef06ed11d4fd2bc6",
+  "prompt_sha": "3f2fedfd6160ebe911b2c0b145a977f74b6bd2143eb068fd5e3afc29ecb2ced5",
+  "model": "claude-fable-5-1",
+  "generated_at": "2026-09-29T20:57:52Z",
+  "note": "First generation a browser can read. Input-reproducible, not output-reproducible.",
+  "tag": "gen-20260929-cors",
+  "trust": "validated",
+  "promoted_at": "2026-09-29T21:03:28Z",
+  "development_corpus": "10/10 green",
+  "holdout_set": "15/15 green",
+  "harness_commit": "79028ecf94106e18efe409eebe34a3293aee4893"
+}

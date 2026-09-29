@@ -1,0 +1,100 @@
+{
+  "scenario": "/Users/davidpalaitis/Developer/riemann-go/scenarios/read-surface-allows-a-browser.yaml",
+  "scenario_name": "read-surface-allows-a-browser",
+  "scenario_description": "The read surface answers a browser, which means every response carries Access-Control-Allow-Origin. SPEC.md \"HTTP surface (normative)\".\nThis is here because production found it and the corpus could not. The dashboard loads its page from one origin and subscribes to riemann-go on another, so without the header every subscription is refused before a byte is read: no error in the server, no failed request in its metrics, just empty panes. The harness drives the server from Python, where the same-origin policy does not exist, so nothing here would ever have noticed.\nExpected duration: about 7 seconds.\n",
+  "binary": "scratch/gen-cors/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:61203",
+  "sink_receiver": "http://127.0.0.1:61202",
+  "settle_seconds": 3.0,
+  "wall_clock_seconds": 4.022,
+  "sink_request_count": 0,
+  "warnings": [],
+  "score": {
+    "overall": 1.0,
+    "category": "GREEN",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 0.0,
+    "scenario_score": 1.0,
+    "assertions_passed": 2,
+    "assertions_total": 2
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "query_response",
+          "kind": "index",
+          "status": 200,
+          "match_count": 1
+        },
+        "match_count": 1,
+        "first_seq": 3,
+        "ok": true
+      }
+    ],
+    "not_contains": [],
+    "order": [],
+    "count": [],
+    "field_exists": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "query_response",
+          "kind": "index"
+        },
+        "field": "allow_origin",
+        "match_count": 1,
+        "ok": true
+      }
+    ]
+  },
+  "trace": [
+    {
+      "ts": 1790715643.13651,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "index-everything",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1790715643.137213,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1790715644.1419442,
+      "source": "harness",
+      "event": "query_response",
+      "kind": "index",
+      "q": "service == \"cors.probe\"",
+      "status": 200,
+      "match_count": 1,
+      "allow_origin": "*",
+      "seq": 3
+    },
+    {
+      "ts": 1790715647.150343,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "index-everything",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 4
+    }
+  ],
+  "riemannd_log_tail": "2026/09/29 17:00:43.133425 riemannd: listening on 127.0.0.1:61203 with 8 shards\n"
+}
