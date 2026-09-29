@@ -28,6 +28,23 @@ No implementation source is checked in at the repo root. riemann-go is a build o
 
 Stream state does not survive a restart. On restart the index is empty, rules start fresh, and entries live before the restart never produce their expiry event. The event ring that serves dry run and `GET /events` is in memory and lost with the process.
 
+## Product, not instance
+
+This repository is what riemann-go *is*: the specification, the semantics, the
+invariants, the validation harness, the scenario corpus, the generation loop,
+and the releases those produce. It does not know which host runs it, on which
+port, against which bus topic or which InfluxDB, and it holds no rule set that
+any fleet runs.
+
+Those belong to an instance. The medios fleet's is
+[deploy-riemann](https://github.com/tnn1t1s/deploy-riemann), which pins a
+release tag from here and renders it into a fennel app.
+
+The seam is a published release. Because the binary is a build output of
+`SPEC.md`, a release tag names a generation rather than a version, and the
+manifest published beside it records the spec, model and prompt that produced
+it. That is what makes "which riemann-go is running" a question with an answer.
+
 ## License
 
 Apache-2.0.
