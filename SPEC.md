@@ -151,6 +151,8 @@ Renaming a path or changing a verb is a wire break. Capabilities are added as ne
 - `GET /index/{host}/{service}` — `200` with one event object, `404` when absent or expired.
 - `GET /events?q=&since=&limit=` — `200` with `{"events":[...]}` from the in-memory ring. Ordering is processing order within a partition; interleaving across partitions is best-effort.
 - `GET /subscribe?q=&snapshot=true` — Server-Sent Events. When `snapshot=true`, the snapshot and the subscription are taken together, so no event falls between them. Delivery is at-most-once; a subscriber that falls behind its queue receives `event: lagged` carrying the count it missed.
+Every response on this surface carries `Access-Control-Allow-Origin: *`, and a `OPTIONS` preflight to any path answers `204` with `Access-Control-Allow-Methods` and `Access-Control-Allow-Headers` covering what the surface accepts. The read surface is meant to be used from a browser: the dashboard loads its page from one origin and subscribes to riemann-go on another, so without this every subscription is refused before a byte is read. A wildcard is right here because the fleet's trust boundary is the tailnet and the server has no per-origin notion of identity; it is not a decision to copy into a deployment that does.
+
 - `GET /healthz` — `200` when the server is ready to accept traffic.
 - `GET /metrics` — `200`, Prometheus text format, carrying at minimum the depth, capacity and dropped counter of every bounded queue named in `SCALE.md`.
 
