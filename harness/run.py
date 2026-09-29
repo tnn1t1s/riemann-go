@@ -175,7 +175,14 @@ class Driver:
                 body = resp.json()
             except Exception:
                 body = {}
-            results = body.get("events", body if isinstance(body, list) else [])
+            # GET /index answers {"as_of":..., "entries":[...]}; GET /events
+            # answers {"events":[...]}. Reading only "events" made every
+            # index query report zero matches, which no scenario noticed
+            # because none asserted on the count.
+            if isinstance(body, list):
+                results = body
+            else:
+                results = body.get("entries", body.get("events", []))
             self.events.append(
                 observer.query_response_event(
                     time.time(),
@@ -183,6 +190,11 @@ class Driver:
                     q=expr,
                     status=resp.status_code,
                     match_count=len(results) if isinstance(results, list) else None,
+                    # A response header, recorded because the read surface is
+                    # meant for a browser and a browser refuses the response
+                    # without it. Mechanical: the header is present or it is
+                    # not, no interpretation.
+                    allow_origin=resp.headers.get("Access-Control-Allow-Origin"),
                 )
             )
         elif "sink_delay" in event:
