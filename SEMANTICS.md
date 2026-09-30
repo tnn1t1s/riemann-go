@@ -1,5 +1,22 @@
 # riemann-go — combinator and index semantics
 
+## Relationship to upstream Riemann
+
+This document describes behaviour. It was written by reading
+[Riemann](https://github.com/riemann/riemann), which is licensed under the
+Eclipse Public License 1.0, and it cites that source by file and line
+throughout so a reader can check any statement against it.
+
+What is reproduced here is what each combinator does, in this project's own
+words, along with small input-and-output tables written for riemann-go's rule
+format rather than copied from Clojure tests. What is not reproduced is
+Riemann's code. riemann-go shares no source with it and is not a derivative
+work of it; it is an independent implementation of behaviour that upstream
+documented first and documented well.
+
+Where this document and upstream disagree, the disagreement is deliberate and
+says so at the point it occurs.
+
 This document states what each combinator does, what state it holds, when its timers fire, and what it does at the edges. It is the normative behavioral reference for a generation. A generation reads this file and does not read upstream Riemann's Clojure.
 
 `SPEC.md` owns the wire: the JSON shape of a rule document, the parameter names, the event model, the alert shape, and the HTTP surface. This document owns behavior. Where a parameter name appears here it is `SPEC.md`'s name, and where the two documents appear to disagree `SPEC.md` wins and this file is the one that gets corrected.
