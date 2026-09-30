@@ -66,6 +66,8 @@ The body of `POST /events` is a JSON array of event objects, or a single event o
 
 One `metric` replaces upstream's three typed protobuf fields. `attributes` is a map, not a repeated pair list. A key absent from `attributes` reads as `""` in an expression, so an author tests presence with `"key" in attributes` rather than a nil comparison.
 
+An absent `metric` is absent, not zero, everywhere it is observed. In an expression it reads as `nil`, so `metric > 5` is false rather than an error and `metric == nil` is how an author tests for it; arithmetic on it yields `nil` and a `set` that assigns `nil` produces an event with no metric. As part of a fork key it is a value of its own, so every metric-less event for one identity shares one fork rather than each taking its own. Zero would have been the cheap choice and it is wrong in both places: a threshold rule would fire on the absence of a measurement, and a fold would count silence as a number.
+
 `ttl`'s default of `60` seconds is a default, not an invariant: it is carried from the fleet's current Clojure configuration, and the value that would revise it is a rule whose behavior depends on expiry timing.
 
 ## Behavioral properties (v0)
@@ -94,13 +96,21 @@ Each property is a MUST that a scenario asserts against the trace. A property wi
 
 11. **`set` rewrites before the sink sees it.** A `set` node evaluates each field expression against the incoming event and passes a new event downstream. The value observed at the sink is the rewritten one.
 
-12. **Timers are ordered against events.** A timer due at or before time T fires before an event stamped T is dispatched. This is what makes `stable` and `throttle` reproducible under a scenario's timeline rather than dependent on scheduling.
+12. **Timers are ordered against events, and run on the wall clock.** A timer due at or before time T fires before an event stamped T is dispatched, which is what makes `stable` and `throttle` reproducible under a scenario's timeline rather than dependent on scheduling.
+
+    The live engine's clock is the wall clock. It is never moved by an event's timestamp. An event stamped in the future is indexed and routed like any other and its `time` is carried unchanged, but it does not advance expiry, a throttle window, or anything else.
+
+    This is the one place the obvious implementation is dangerous, so it is stated rather than left open. A clock that takes the highest timestamp it has seen is attractive: it makes replay deterministic and it lets a test drive time through the data. It also means one emitter with a skewed clock drags the whole engine forward, every indexed entry whose lease has lapsed expires at once, and because such a clock never runs backwards the damage lasts until the wall clock catches up. For a system whose product is noticing silence, that is an alert storm on every identity at once, from one bad timestamp, with no authentication in front of it.
+
+    Nor can the clock be driven by event time alone. Silence becoming an event is the whole point here, and silence means no events arriving, so a clock that only advances on arrivals would stop precisely when it is needed.
+
+    Determinism is still required where it is actually needed, and property 15 puts it there: a dry run replays under the timestamps of the events it replays, touching no live sink.
 
 13. **Every alert carries its provenance.** Every `ntfy_post` carries the rule id, the rule version, the owner, the triggering event's host, service, state and metric, the prior state a traversed `changed-state` left, and the node path. The placement of these fields is pinned in `## Alert shape (normative)`.
 
 14. **Rules are idempotent by content.** `PUT /rules/{id}` with a body whose canonical form hashes to the stored rule's hash is a no-op and returns the existing `version`. A body with a different hash increments `version`, creates a fresh instance, and does not carry the previous instance's state across.
 
-15. **Dry run touches nothing live.** `POST /rules/{id}/dryrun` returns what each sink stub received and produces no `ntfy_post` and no `influx_write` at the sink receiver. Running the same dry run twice over the same ring content returns the same result.
+15. **Dry run touches nothing live, and is a function of the data.** `POST /rules/{id}/dryrun` returns what each sink stub received and produces no `ntfy_post` and no `influx_write` at the sink receiver. It replays the ring under a clock driven by the replayed events' own timestamps rather than the wall clock, which is what makes the same dry run over the same ring return the same result whenever it is run. A timer due after the last replayed event does not fire, because nothing advances the clock past it. The rule's `enabled` flag and `expires_at` are honoured against that same clock, so a dry run reports what the rule would have done, not what a differently configured rule would have done.
 
 16. **A drop is counted, never silent.** Every event discarded at a bounded queue increments that queue's `dropped` counter, which is readable in the `sinks` object of a `202` reply and at `GET /metrics`. See `SCALE.md` for the accounting identity these counters close.
 
@@ -149,7 +159,7 @@ Renaming a path or changing a verb is a wire break. Capabilities are added as ne
 
 - `GET /index?q=<expr>` — `200` with `{"as_of":{"min":t,"max":t},"entries":[...]}`. Each entry is an event object. `as_of` bounds the instants the per-partition slices were taken; they are not simultaneous.
 - `GET /index/{host}/{service}` — `200` with one event object, `404` when absent or expired.
-- `GET /events?q=&since=&limit=` — `200` with `{"events":[...]}` from the in-memory ring. Ordering is processing order within a partition; interleaving across partitions is best-effort.
+- `GET /events?q=&since=&limit=` — `200` with `{"events":[...]}` from the in-memory ring. Ordering is processing order within a partition; interleaving across partitions is best-effort. `since` is float seconds and selects events whose `time` is at or after it, so a caller can page by passing the last `time` it saw without re-reading that event's neighbours by luck. `limit` keeps the most recent matches and defaults to 1000; a `limit` of 0 or less is a `400` rather than a silent everything.
 - `GET /subscribe?q=&snapshot=true` — Server-Sent Events. When `snapshot=true`, the snapshot and the subscription are taken together, so no event falls between them. Delivery is at-most-once; a subscriber that falls behind its queue receives `event: lagged` carrying the count it missed.
 Every response on this surface carries `Access-Control-Allow-Origin: *`, and a `OPTIONS` preflight to any path answers `204` with `Access-Control-Allow-Methods` and `Access-Control-Allow-Headers` covering what the surface accepts. The read surface is meant to be used from a browser: the dashboard loads its page from one origin and subscribes to riemann-go on another, so without this every subscription is refused before a byte is read. A wildcard is right here because the fleet's trust boundary is the tailnet and the server has no per-origin notion of identity; it is not a decision to copy into a deployment that does.
 
@@ -191,6 +201,8 @@ No `/v1` prefix. Additional read paths may be added but MUST NOT collide with th
 | `enabled` | no | Boolean, default `true`. A disabled rule compiles, holds no state, and never fires. |
 | `expires_at` | no | Float seconds since epoch. Past that time the rule behaves as disabled. |
 | `version` | server-owned | Monotonic integer per id. A client-supplied `version` is ignored. |
+
+Rules are evaluated in ascending `id` order within a partition, and partition-local rules run before global ones. The order matters only where two rules write the same index identity, in which case the last write wins and is therefore predictable rather than a property of a map iteration. Nothing else about a rule should depend on it: a rule that only fires correctly because another ran first is a rule waiting to break when someone renames it.
 
 A `global` rule receives a copy of every event, from every partition, and holds one instance of its state for the whole process rather than one per partition. A `host` or `host,service` rule runs in each partition over that partition's events alone. With `--shards 1` these coincide, which is why a generation that collapses every partition into one passes a scenario that a multi-partition run would fail: the per-partition metrics still report, and `riemann.shard.*` carries a `shard` attribute naming which partition it describes, so a run with `--shards 4` emits that set four times. A `host` or `host,service` rule sees only the events of the partition it runs on. A rule declaring `host` whose tree contains `coalesce` is refused at `PUT` with `400`, because a per-host partition cannot answer a fleet-wide fold.
 
@@ -248,7 +260,7 @@ Every firing at `{"sink":"ntfy"}` is one HTTP `POST` to the `--ntfy-url` root wi
 
 - `topic` is the value of `--ntfy-topic`.
 - `title` is `"<host> <service> <state>"`.
-- `message` is the human line `"<host> <service> is <state> (<metric>)"`, then a newline, then one line beginning with the literal `riemann-go: ` followed by a compact JSON object with exactly these keys, in this order: `rule`, `version`, `owner`, `host`, `service`, `state`, `metric`, `prior_state`, `node`.
+- `message` is the human line `"<host> <service> is <state> (<metric>)"`, with the parentheses and their contents omitted entirely when the event has no metric, so a state-only alert reads `"ghost agent.session is critical"` rather than trailing an empty pair. Then a newline, then one line beginning with the literal `riemann-go: ` followed by a compact JSON object with exactly these keys, in this order: `rule`, `version`, `owner`, `host`, `service`, `state`, `metric`, `prior_state`, `node`.
 - `prior_state` is `null` when the path traversed no `changed-state` node. `metric` is `null` when the event carries none.
 - `node` is the node path of the sink leaf, per `## Rule document`.
 - `priority` maps from the event's state: `ok` and `info` to 2, `warning` to 4, `error`, `critical` and `emergency` to 5, anything else to 3. This is the mapping the fleet's Clojure sink already uses (`src/riemann/ntfy.clj`).
@@ -262,7 +274,7 @@ Every firing at `{"sink":"influx"}` is one line of InfluxDB v2 line protocol, ap
 <service>,host=<host>[,state=<state>][,<attr-key>=<attr-value>]... metric=<metric> <time_ns>
 ```
 
-The measurement is the event's `service`. The `state` tag is omitted when the state is empty. Each entry of `attributes` becomes one tag. Measurement names, tag keys and tag values are escaped per line protocol. An event with no `metric` is not written and increments the influx sink's `dropped` counter, because a point with no field is not a point.
+The measurement is the event's `service`. The `host` tag is always present. The `state` tag is omitted when the state is empty. Each entry of `attributes` becomes one tag, written in sorted key order so the same event always produces the same line. An attribute whose key or value is empty is skipped, because line protocol cannot carry an empty tag, and an attribute named `host` or `state` is skipped rather than overwriting the tag of that name, since a line with a duplicate tag key is rejected by InfluxDB and would lose the whole batch. Measurement names, tag keys and tag values are escaped per line protocol. An event with no `metric` is not written and increments the influx sink's `dropped` counter, because a point with no field is not a point.
 
 A firing at `{"sink":"index"}` inserts the event into the index. It is observable through property 5 rather than at the sink receiver.
 
