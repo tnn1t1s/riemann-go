@@ -113,6 +113,10 @@ class Adapter:
     def get_rule(self, rule_id: str) -> requests.Response:
         return requests.get(f"{self._base()}/rules/{rule_id}", timeout=10)
 
+    def dryrun_rule(self, rule_id: str, body: Dict[str, Any]) -> requests.Response:
+        return requests.post(f"{self._base()}/rules/{rule_id}/dryrun",
+                             json=body, timeout=10)
+
     def delete_rule(self, rule_id: str) -> requests.Response:
         return requests.delete(f"{self._base()}/rules/{rule_id}", timeout=10)
 

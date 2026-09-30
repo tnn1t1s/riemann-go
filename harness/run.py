@@ -160,6 +160,19 @@ class Driver:
                     time.time(), "put", rule_id, resp.status_code, version
                 )
             )
+        elif "dryrun_rule" in event:
+            spec = event["dryrun_rule"]
+            resp = self.adapter.dryrun_rule(spec["id"], spec["rule"])
+            try:
+                firings = (resp.json() or {}).get("firings", [])
+            except Exception:
+                firings = []
+            self.events.append(
+                observer.rule_response_event(
+                    time.time(), "dryrun", spec["id"], resp.status_code, None
+                )
+                | {"firing_count": len(firings) if isinstance(firings, list) else None}
+            )
         elif "delete_rule" in event:
             rule_id = event["delete_rule"]
             resp = self.adapter.delete_rule(rule_id)

@@ -1,3 +1,10 @@
+# BURNED from the held-out set on 2026-09-30, under scenarios/holdout/README.md
+# rule 5. It failed in three of six generations, which is a spec ambiguity
+# rather than a bad roll: SEMANTICS.md required the rejection, SPEC.md said
+# only that a rule which does not compile is a 400, and the prompt's conflict
+# order puts SPEC first. SPEC.md now states that a predicate must be of
+# boolean type, so the spec is fitted to this case and it measures nothing
+# about generalisation any more.
 name: where-refuses-a-non-boolean-predicate
 description: >
   Source: upstream `where-test` "return value" and `where*-test`, both of which

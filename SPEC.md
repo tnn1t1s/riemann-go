@@ -168,11 +168,11 @@ Every response on this surface carries `Access-Control-Allow-Origin: *`, and a `
 
 **Rules.**
 
-- `PUT /rules/{id}` — `200` when the content hash is unchanged, `201` when a new version is created. Body of either is the stored rule document with `version`. `400` on a rule that does not compile, with a message naming the node path or the expression that failed.
+- `PUT /rules/{id}` — `200` when the content hash is unchanged, `201` when a new version is created. Body of either is the stored rule document with `version`. `400` on a rule that does not compile, with a message naming the node path or the expression that failed. An expression used as a predicate, which is a rule's `match`, a `where`'s `expr`, and a `splitp` `test`, must be of boolean type, and one that is not fails to compile. There is no truthiness coercion at evaluation time: a `where` whose `expr` is `metric` is a projection that upstream would treat as matching every event with a metric, and a predicate that is accidentally a projection fires on everything, which is the hardest failure to notice once a rule is live.
 - `GET /rules` — `200` with an array of rule documents.
 - `GET /rules/{id}` — `200` with the rule document plus `counters`, an object mapping each node path in the rule's tree to the number of events that node has passed downstream since the current version was installed, `404` when unknown. A rule that has never matched anything reports zero at every node, which is how a caller distinguishes a rule that is not firing from a rule that is firing into the index where nothing external can see it.
 - `DELETE /rules/{id}` — `204` on delete, `404` when unknown.
-- `POST /rules/{id}/dryrun` — `200` with `{"firings":[...]}`, one entry per sink stub delivery, each carrying the sink name, the event as the stub received it, and the node path. `404` when unknown.
+- `POST /rules/{id}/dryrun` — `200` with `{"firings":[...]}`, one entry per sink stub delivery, each carrying the sink name, the event as the stub received it, and the node path. The body is a rule document and it is what gets evaluated, whether or not a rule with that id is installed, so a rule can be tested before it exists and a change can be tested before it replaces what is running. An id that resolves to nothing is therefore not an error. `400` when the body does not compile, with the same message a `PUT` would give. Dry run is a preventive control: requiring the rule to be installed first would mean the only way to test whether a rule pages someone is to let it.
 
 No `/v1` prefix. Additional read paths may be added but MUST NOT collide with the set above.
 
