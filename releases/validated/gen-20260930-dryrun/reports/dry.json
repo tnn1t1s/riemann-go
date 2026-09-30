@@ -1,0 +1,109 @@
+{
+  "scenario": "scenarios/holdout/dryrun-tests-a-rule-that-is-not-installed.yaml",
+  "scenario_name": "dryrun-tests-a-rule-that-is-not-installed",
+  "scenario_description": "A dry run evaluates the rule document in the body, whether or not a rule with that id is installed. SPEC.md \"HTTP surface (normative)\".\nWritten from the specification, and derived from what dry run is for rather than from any implementation: a preventive control that requires the thing it protects against is not one. If a rule must be installed before it can be tested, the only way to find out whether it pages someone is to let it.\nIt replaces where-refuses-a-non-boolean-predicate, which was burned the same day. Expected duration: about 8 seconds.\n",
+  "binary": "scratch/gen-silences/riemannd",
+  "adapter": "riemannd",
+  "listen_addr": "127.0.0.1:56697",
+  "sink_receiver": "http://127.0.0.1:56696",
+  "settle_seconds": 3.0,
+  "wall_clock_seconds": 4.232,
+  "sink_request_count": 0,
+  "warnings": [],
+  "score": {
+    "overall": 0.0,
+    "category": "sink_error",
+    "compile_score": 1.0,
+    "start_score": 1.0,
+    "ingest_score": 1.0,
+    "rule_score": 1.0,
+    "sink_score": 0.0,
+    "scenario_score": 0.6666666666666666,
+    "assertions_passed": 2,
+    "assertions_total": 3
+  },
+  "matcher": {
+    "contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "rule_response",
+          "kind": "dryrun",
+          "id": "never-installed",
+          "status": 200
+        },
+        "match_count": 0,
+        "first_seq": null,
+        "ok": false
+      }
+    ],
+    "not_contains": [
+      {
+        "index": 0,
+        "pattern": {
+          "event": "ntfy_post",
+          "rule": "never-installed"
+        },
+        "match_count": 0,
+        "ok": true
+      },
+      {
+        "index": 1,
+        "pattern": {
+          "event": "rule_response",
+          "kind": "put",
+          "id": "never-installed"
+        },
+        "match_count": 0,
+        "ok": true
+      }
+    ],
+    "order": [],
+    "count": [],
+    "field_exists": []
+  },
+  "trace": [
+    {
+      "ts": 1790780133.205552,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "put",
+      "id": "seed-index",
+      "status": 201,
+      "version": 1,
+      "seq": 1
+    },
+    {
+      "ts": 1790780133.206731,
+      "source": "harness",
+      "event": "ingest_response",
+      "status": 202,
+      "accepted": 1,
+      "rejected": null,
+      "seq": 2
+    },
+    {
+      "ts": 1790780134.213216,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "dryrun",
+      "id": "never-installed",
+      "status": 404,
+      "version": null,
+      "firing_count": 0,
+      "seq": 3
+    },
+    {
+      "ts": 1790780137.218587,
+      "source": "harness",
+      "event": "rule_response",
+      "kind": "get",
+      "id": "seed-index",
+      "status": 200,
+      "version": null,
+      "fired": true,
+      "seq": 4
+    }
+  ],
+  "riemannd_log_tail": "riemannd: listening on 127.0.0.1:56697 with 8 shards\n"
+}
