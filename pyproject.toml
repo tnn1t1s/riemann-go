@@ -1,14 +1,17 @@
 [project]
 name = "riemann-go"
-version = "0.0.0"
+version = "0.1.0"
 description = "Specification, Gherkin corpus and trial tooling for riemann-go; the binary is a build output"
 requires-python = ">=3.11"
 dependencies = [
-  "riemann-harness",
+    "riemann-harness @ git+https://github.com/tnn1t1s/riemann-harness.git@f31ad1ff195b1607fe16d02566dcd1ac696628ff",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.4.2",
+    "pytest-bdd==8.1.0",
 ]
 
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-riemann-harness = { git = "https://github.com/tnn1t1s/riemann-harness" }

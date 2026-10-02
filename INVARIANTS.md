@@ -78,7 +78,7 @@ The packages that hold the event model, the expression compiler, the combinators
 
 An emitter's HTTP request is answered within the admission deadline, always. Past the deadline the answer is `429`, never a stall, and never a `202` bought by waiting longer. The emitter's contract is fire-and-forget: it counts what it lost and moves on.
 
-**Why.** The atlas vocabulary's third rule is that emission never affects the agent (`~/Developer/riemann-atlas/VOCABULARY.md`). An agent that blocks on its monitor has had its behavior changed by being observed, which is worse than losing the observation. That is what fixes the meaning of backpressure here: the server sheds by declared policy and reports what it shed, rather than pushing the cost back onto the caller.
+**Why.** The riemann-agent-obs vocabulary's third rule is that emission never affects the agent (`~/Developer/riemann-agent-obs/VOCABULARY.md`). An agent that blocks on its monitor has had its behavior changed by being observed, which is worse than losing the observation. That is what fixes the meaning of backpressure here: the server sheds by declared policy and reports what it shed, rather than pushing the cost back onto the caller.
 
 **Acid test.** Under a scenario that saturates the loop, no `POST /events` takes materially longer than the deadline, and every reply is either `202` or `429`. A reply that arrives late with `202` is a violation even though the events were admitted.
 

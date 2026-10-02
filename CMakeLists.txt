@@ -23,7 +23,8 @@ add_custom_command(
   DEPENDS "${CMAKE_SOURCE_DIR}/SPEC.md" "${CMAKE_SOURCE_DIR}/SEMANTICS.md"
     "${CMAKE_SOURCE_DIR}/SCALE.md" "${CMAKE_SOURCE_DIR}/INVARIANTS.md"
     "${CMAKE_SOURCE_DIR}/knowledge/INDEX.md" "${CMAKE_SOURCE_DIR}/bin/prompt.md"
-    "${CMAKE_SOURCE_DIR}/bin/generate"
+    "${CMAKE_SOURCE_DIR}/bin/generate" "${CMAKE_SOURCE_DIR}/harness/inputs.py"
+    "${CMAKE_SOURCE_DIR}/pyproject.toml" "${CMAKE_SOURCE_DIR}/uv.lock"
     "${RG_AGENT_COMMAND_FILE}" "${CMAKE_BINARY_DIR}/generation-settings.txt"
   COMMENT "Generating and building riemannd from its specification"
   USES_TERMINAL VERBATIM)

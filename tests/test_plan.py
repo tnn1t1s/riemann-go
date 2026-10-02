@@ -3,7 +3,9 @@ import copy
 
 import pytest
 
-from harness.plan import validate
+from harness.session import RiemannSession
+
+validate = RiemannSession.validate
 
 GOOD = {"name": "p", "settle": 0.1,
         "rules": [{"id": "r", "stream": {"sink": "ntfy"}}],

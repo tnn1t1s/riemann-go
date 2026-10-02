@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from riemann_harness.features import ENV
+
 root = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--command', required=True, help='Candidate as a JSON argv array; command[0] is the absolute riemannd path')
@@ -21,7 +23,8 @@ p.add_argument('--spec', default=str(root / 'SPEC.md'), help='The SPEC.md the ca
 p.add_argument('--build-manifest', help='build-manifest.json binding the artifact to that SPEC.md')
 p.add_argument('--unbound', action='store_true', help='Waive the binding check; the report records the waiver')
 p.add_argument('--holdout', action='store_true', help='Also run features/holdout/ (promotion run)')
-p.add_argument('--ready-timeout', type=float, default=15.0)
+p.add_argument('--ready-timeout', type=float, default=15.0,
+               help='Seconds to wait for GET /healthz after launch; a compiled riemannd answers within one')
 p.add_argument('-k', default='', help='pytest scenario selection expression')
 p.add_argument('-m', default='', help='pytest tag selection expression')
 a = p.parse_args()
@@ -35,15 +38,15 @@ if not a.build_manifest and not a.unbound:
     p.error('pass --build-manifest, or --unbound to waive the binding check')
 out = Path(a.out).resolve()
 out.mkdir(parents=True, exist_ok=True)
-env = dict(os.environ, RIEMANN_GO_FEATURES=str(Path(a.features).resolve()))
+env = dict(os.environ, **{ENV: str(Path(a.features).resolve())})
 env['RIEMANN_GO_HOLDOUT'] = '1' if a.holdout else '0'
 args = [sys.executable, '-m', 'pytest', 'features/test_features.py', '-p', 'no:cacheprovider',
-        '--riemann-command', json.dumps(command), '--riemann-out', str(out),
-        '--riemann-spec', str(Path(a.spec).resolve()),
-        '--riemann-ready-timeout', str(a.ready_timeout),
+        '--harness-command', json.dumps(command), '--harness-out', str(out),
+        '--harness-spec', str(Path(a.spec).resolve()),
+        '--harness-ready-timeout', str(a.ready_timeout),
         '--junitxml', str(out / 'junit.xml'), '-v']
 if a.build_manifest:
-    args += ['--riemann-build-manifest', str(Path(a.build_manifest).resolve())]
+    args += ['--harness-build-manifest', str(Path(a.build_manifest).resolve())]
 if a.unbound:
     args += ['--riemann-unbound']
 if a.k:

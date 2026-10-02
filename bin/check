@@ -6,16 +6,18 @@ import sys
 import tempfile
 from pathlib import Path
 
+from riemann_harness.features import ENV
+
 root = Path(__file__).resolve().parents[1]
 env = dict(os.environ)
-env.pop('RIEMANN_GO_FEATURES', None)
+env.pop(ENV, None)
 # Validation parses the held-out set too: a malformed holdout should fail here,
 # not at promotion. Validation reads data shape only and renders no verdict.
 env['RIEMANN_GO_HOLDOUT'] = '1'
 with tempfile.TemporaryDirectory(prefix='riemann-go-feature-validation-') as out:
     result = subprocess.call([sys.executable, '-m', 'pytest', 'features/test_features.py',
-                              '-p', 'no:cacheprovider', '--riemann-validate',
-                              '--riemann-out', out, '-q'], cwd=root, env=env)
+                              '-p', 'no:cacheprovider', '--harness-validate',
+                              '--harness-out', out, '-q'], cwd=root, env=env)
     if result:
         raise SystemExit(result)
 print('Gherkin binding/data validation complete; running harness self-tests.', flush=True)

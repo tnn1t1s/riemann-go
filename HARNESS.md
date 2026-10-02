@@ -24,11 +24,11 @@ Five layers. Each one is smaller and changes less often than the layer above it.
 
 3. **Generic matcher.** `riemann_harness.matcher`, five operators over field-by-field equality. The code is the one riemann-graph and riemann-go have shared since cue's arena; it has no domain nouns.
 
-4. **Gherkin features.** Stimulus and assertions, one feature per scenario. A new property is a new file. The step table in `harness/bdd.py` maps each step onto one plan entry and nothing more.
+4. **Gherkin features.** Stimulus and assertions, one feature per scenario. A new property is a new file. The step table in `harness/steps.py` maps each step onto one plan entry and nothing more; the arena, the trial options and the five assertion steps come from `riemann_harness.bdd` and `riemann_harness.steps`.
 
 5. **Adapter.** `harness/adapters/riemannd.py`, the only place riemann-go's surface appears. It supplies the start command, the ready check, and how to post events, put and delete a rule, dry-run a rule, and query the index. Process lifecycle belongs to `harness/session.py`, not to it.
 
-The shared package `riemann_harness` (tnn1t1s/riemann-harness) carries the layers that are the same for every riemann project: the sink receiver, the matcher, the score categories and the HTTP client. This repository keeps what is riemann-go's: the adapter, the observer that knows the alert shape, the plan validation, the session and the step table.
+The shared package `riemann_harness` (tnn1t1s/riemann-harness) carries the layers that are the same for every riemann project: the sink receiver, the matcher, the score categories, the HTTP client, the launch adapter, the session lifecycle, the pytest-bdd arena and the generation scripts. This repository keeps what is riemann-go's: the riemannd flags, the observer that knows the alert shape, the plan checks, the session hooks (binding, receiver, rule seeding, timeline, counters, trace build) and the stimulus step table.
 
 ## The oracle
 
@@ -152,11 +152,11 @@ The cost is that a scenario cannot assert a ten-minute stall window, and that is
 
 ## Process-lifecycle ownership
 
-The session starts the sink receiver, starts riemannd through the adapter with the receiver's URL in its own process group, waits for ready, seeds the rules, drives the timeline as the `When` steps arrive, and on the first `Then` settles, reads each seeded rule's counters, stops riemannd, stops the receiver, builds the trace and evaluates. Every one of those steps is in `harness/session.py`.
+The session starts the sink receiver, starts riemannd through the adapter with the receiver's URL in its own process group, waits for ready, seeds the rules, drives the timeline as the `When` steps arrive, and on the first `Then` settles, reads each seeded rule's counters, stops riemannd, stops the receiver, builds the trace and evaluates. The lifecycle is `riemann_harness.session.Session`; the riemann-go hooks are in `harness/session.py`.
 
 The adapter owns four things and no more: the start command including every URL and port, the ready check, the event and rule surfaces, and the index query. It cannot skip a stop or start with different state, because it never decides when either happens.
 
-Readiness is `GET /healthz` returning 200, which SPEC.md's HTTP surface pins as the readiness claim. The adapter asks that and nothing else. The ready timeout is 15 seconds by default (`--ready-timeout`), a parameter of the trial rather than of the product.
+Readiness is `GET /healthz` returning 200, which SPEC.md's HTTP surface pins as the readiness claim. The adapter asks that and nothing else. `bin/trial --ready-timeout` is 15 seconds by default, a parameter of the trial rather than of the product; the shared session's own default is 5.
 
 Before launch, the session verifies the binding: the artifact at `command[0]` hashes to an entry in `build-manifest.json`, and the expected SPEC.md hashes to the manifest's `spec_sha256`. `harness/binding.py` accepts either the native `artifact_sha256` or any entry in the `artifacts` map, because one riemann-go generation produces the host-native `service` and three cross-compiled release assets from one source tree. A mismatch fails the case before riemannd starts, with no trace. `--unbound` waives the check and the report records the waiver; it exists for artifacts that predate the manifest and for fixtures, never for a promotion run.
 
@@ -181,15 +181,15 @@ The three middle categories name riemann-go's own pipeline stages, so a failed r
 
 `rule_error` means events were admitted and no rule ever fired. A firing is not visible at the sink receiver on its own: one that reaches a sink cannot be told apart from ordinary sink traffic, and one that goes to the `index` sink reaches no external process at all. After settle the session reads each seeded rule's node counters, which SPEC.md's `GET /rules/{id}` returns, and a rule whose every node reads zero has not fired. That read is harness evidence rather than oracle evidence. It is acceptable here because it classifies a failure and no scenario asserts on it; an assertion resting on it would be the implementation grading itself.
 
-The matcher's verdict is the final arbiter. Categories classify a failure and never gate a pass, so a scenario whose assertions all held is GREEN even when no sink was posted to, because a scenario can assert exactly that silence. The category is written to `report.json`, to `summary.json` and as a `category` property on the JUnit test case.
+The matcher's verdict is the final arbiter. Categories classify a failure and never gate a pass, so a scenario whose assertions all held is GREEN even when no sink was posted to, because a scenario can assert exactly that silence. The category is written to `report.json` and to `summary.json`.
 
 ## Outputs
 
 `bin/trial --out DIR` writes:
 
-- `DIR/<scenario>-<key>/report.json`: scenario name, feature file and its SHA-256, tags, category, the per-assertion matcher report, the score block, settle and wall-clock seconds, the sink request count, the command, the build binding, and the plan's SHA-256.
-- `DIR/<scenario>-<key>/trace.jsonl`: the normalized trace the matcher read.
-- `DIR/<scenario>-<key>/candidate.log`: riemannd's whole stdout and stderr, written even when empty so an absent file means the run did not get that far.
+- `DIR/<case>-<key>/report.json`: scenario name, feature file and its SHA-256, category, the per-assertion matcher report, the score block, settle and wall-clock seconds, the sink request count, the command, the build binding, and the plan's SHA-256.
+- `DIR/<case>-<key>/trace.jsonl`: the normalized trace the matcher read.
+- `DIR/<case>-<key>/candidate.log`: riemannd's whole stdout and stderr, written even when empty so an absent file means the run did not get that far.
 - `DIR/junit.xml`: pytest's JUnit report, one test case per scenario.
 - `DIR/summary.json`: every scenario's category, assertion counts and case directory, and the green count.
 

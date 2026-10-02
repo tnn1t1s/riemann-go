@@ -12,14 +12,14 @@ FIXTURE = ROOT / "tests/riemannd_fixture.py"
 
 
 def invoke(tmp_path, mode="good", feature=None, validate=False, expression=None, holdout=False):
-    env = dict(os.environ, RIEMANN_GO_FEATURES=str(feature or ROOT / "tests/features"),
+    env = dict(os.environ, RIEMANN_HARNESS_FEATURES=str(feature or ROOT / "tests/features"),
                RIEMANN_GO_HOLDOUT="1" if holdout else "0")
     args = [sys.executable, "-m", "pytest", "features/test_features.py", "-q", "-p", "no:cacheprovider",
-            "--riemann-out", str(tmp_path / "reports"), "--riemann-ready-timeout", "3"]
+            "--harness-out", str(tmp_path / "reports"), "--harness-ready-timeout", "3"]
     if validate:
-        args.append("--riemann-validate")
+        args.append("--harness-validate")
     else:
-        args += ["--riemann-command", json.dumps([sys.executable, str(FIXTURE), "--mode", mode]),
+        args += ["--harness-command", json.dumps([sys.executable, str(FIXTURE), "--mode", mode]),
                  "--riemann-unbound"]
     if expression:
         args += ["-m", expression]
@@ -68,11 +68,11 @@ def test_invalid_features_fail_closed(tmp_path, mutation):
 def test_holdout_is_collected_only_on_request(tmp_path):
     result, reports = invoke(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert [r["scenario"] for r in reports] == ["one event routed to ntfy arrives with provenance"]
+    assert [r["scenario_name"] for r in reports] == ["one event routed to ntfy arrives with provenance"]
     result, reports = invoke(tmp_path / "with", holdout=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(reports) == 2
-    gated = next(r for r in reports if "holdout" in r["tags"])
+    gated = next(r for r in reports if r["scenario_name"].startswith("a held-out case"))
     assert gated["category"] == "GREEN"
 
 
@@ -91,10 +91,10 @@ def test_skipped_case_cannot_pass(tmp_path):
     feature.write_text(text)
     conftest = tmp_path / "conftest.py"
     conftest.write_text("")
-    env = dict(os.environ, RIEMANN_GO_FEATURES=str(feature), RIEMANN_GO_HOLDOUT="0")
+    env = dict(os.environ, RIEMANN_HARNESS_FEATURES=str(feature), RIEMANN_GO_HOLDOUT="0")
     args = [sys.executable, "-m", "pytest", "features/test_features.py", "-q", "-p", "no:cacheprovider",
-            "--riemann-out", str(tmp_path / "reports"), "--riemann-unbound",
-            "--riemann-command", json.dumps([sys.executable, str(FIXTURE)]),
+            "--harness-out", str(tmp_path / "reports"), "--riemann-unbound",
+            "--harness-command", json.dumps([sys.executable, str(FIXTURE)]),
             "-o", "markers=skipme: fixture\nP1: fixture",
             "-p", "tests.skip_plugin"]
     result = subprocess.run(args, cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)

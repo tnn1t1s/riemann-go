@@ -1,32 +1,45 @@
 """Drive one riemannd candidate and grade what the sink receiver observed.
 
-The session owns the whole lifecycle: start the sink receiver on an ephemeral
-loopback port, start riemannd through the adapter pointed at it, wait for
-ready, seed the rules, drive the stimulus timeline, settle, read the rule
-counters, stop riemannd, stop the receiver, build the trace, evaluate. The
-Gherkin steps call into this object; nothing here understands a combinator, a
-threshold or a state.
+The shared Session owns port, working directory, launch, readiness, deadline,
+settle, teardown and the report files. This subclass adds what is
+riemann-go's: the binding check over a multi-artifact manifest, the sink
+receiver as oracle, rule seeding, a stimulus timeline with offsets from the
+first stimulus, the rule-counter read that classifies a failure, the trace
+built from receiver records plus harness replies, and the score categories.
+Nothing here understands a combinator, a threshold or a state.
 """
-import hashlib
 import json
-import socket
-import tempfile
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from riemann_harness.matcher import evaluate
 from riemann_harness.score import compute
+from riemann_harness.session import DEFAULT_READY_TIMEOUT_SECONDS, Session
 from riemann_harness.sinks import SinkReceiver
 
-from harness import observer
+from harness import observer, plan
 from harness.adapters.riemannd import Adapter
+from harness.binding import verify
 
+# Whole-trial deadline, in seconds, when a scenario names none. Default: the
+# longest scenario in the corpus runs about 14 s of stimulus and settle; 120
+# leaves room for a slow candidate without letting a hung one stall a corpus.
+TRIAL_TIMEOUT_SECONDS = 120
+# Settle after the last stimulus, in seconds, when a scenario names none. The
+# report records the effective value beside the wall clock.
+SETTLE_SECONDS = 5
 
-def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+# op -> (allowed keys, required keys), both excluding "op". Every stimulus
+# step carries `at`, its offset from the first stimulus.
+STEPS = {
+    "emit": ({"at", "events"}, {"at", "events"}),
+    "emit_n": ({"at", "count", "batch_size", "interval", "template"}, {"at", "count", "batch_size", "interval", "template"}),
+    "put_rule": ({"at", "id", "rule"}, {"at", "id", "rule"}),
+    "delete_rule": ({"at", "id"}, {"at", "id"}),
+    "dryrun_rule": ({"at", "id", "rule"}, {"at", "id", "rule"}),
+    "query_index": ({"at", "q"}, {"at", "q"}),
+    "sink_delay": ({"at", "sink", "seconds"}, {"at", "sink", "seconds"}),
+    "sink_fail": ({"at", "sink", "status"}, {"at", "sink", "status"}),
+}
 
 
 def expand(template: Dict[str, Any], i: int) -> Dict[str, Any]:
@@ -39,83 +52,84 @@ def _json_object(body) -> Dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
-class Session:
-    """One isolated candidate. Steps drive it immediately; close() grades."""
+class RiemannSession(Session):
+    steps = STEPS
+    profiles = ("sinks",)
+    scenario_keys = frozenset({"rules", "ntfy_topic"})
+    ready_path = "/healthz"
+    work_prefix = "riemann-arena-"
+    evidence = "sink-receiver observations over loopback HTTP plus harness-emitted replies"
+    # Set per trial by the harness_session_class fixture from the command line.
+    spec_path = None
+    manifest_path = None
+    unbound = False
 
-    def __init__(self, plan: Dict[str, Any], command: List[str], out_dir, ready_timeout: float = 15.0):
-        self.plan, self.command = plan, list(command)
-        self.out = Path(out_dir)
-        self.out.mkdir(parents=True, exist_ok=True)
-        self.ready_timeout = ready_timeout
+    def __init__(self, scenario, command, out_dir, ready_timeout=DEFAULT_READY_TIMEOUT_SECONDS):
+        super().__init__(scenario, command, out_dir, ready_timeout)
+        self.deadline = self.begin + scenario.get("timeout", TRIAL_TIMEOUT_SECONDS)
         self.events: List[Dict[str, Any]] = []
-        self.rows: List[Dict[str, Any]] = []
-        self.started = False
-        self.closed = False
-        self.category: Optional[str] = None
-        self.error: Optional[str] = None
-        self.warnings: List[str] = []
-        self.receiver: Optional[SinkReceiver] = None
-        self.adapter: Optional[Adapter] = None
-        self.state_dir: Optional[tempfile.TemporaryDirectory] = None
-        self.log = ""
-        self.listen_addr = None
-        self.t0: Optional[float] = None
-        self.wall_start = time.time()
         self.records: List[Dict[str, Any]] = []
+        self.receiver = None
+        self.binding = None
+        self.t0 = None
+        self.wall_start = time.time()
 
-    # ---- lifecycle ---------------------------------------------------------
+    @classmethod
+    def validate(cls, scenario):
+        plan.validate(scenario)
+        return super().validate(scenario)
 
-    def fail(self, exc, category: str = "driver_error") -> None:
-        self.category = self.category or category
-        self.error = str(exc)
+    # ---- hooks ---------------------------------------------------------------
 
-    def start(self) -> None:
+    def before_launch(self):
+        if self.unbound:
+            self.binding = {"status": "unbound",
+                            "reason": "trial run with --unbound; artifact and SPEC.md bytes were not verified"}
+        else:
+            self.binding = verify(self.command, self.spec_path, self.manifest_path)[1]
+        self.receiver = SinkReceiver().start()
+
+    def make_adapter(self, listen, directory):
+        return Adapter(self.command, listen, directory,
+                       ntfy_url=self.receiver.ntfy_url,
+                       ntfy_topic=self.scenario.get("ntfy_topic", "arena"),
+                       influx_url=self.receiver.influx_url,
+                       config=self.scenario.get("config") or {})
+
+    def after_ready(self):
+        for rule in self.scenario.get("rules") or []:
+            self._put_rule(rule["id"], rule)
+        self.t0 = time.time()
+
+    def extra_step(self, step):
+        if step.get("op") not in STEPS:
+            super().extra_step(step)
+        sleep_for = self.t0 + float(step["at"]) - time.time()
+        if sleep_for > 0:
+            time.sleep(sleep_for)
+        self._apply(step)
+
+    def close_observers(self):
+        # After settle and before riemannd stops: failure classification only.
+        if self.started and not self.category:
+            self._read_rule_counters()
+
+    def after_stop(self):
+        if self.receiver:
+            self.records = self.receiver.records()
+            self.receiver.stop()
+        # Rows the shared session recorded (run_error) keep their timestamps and
+        # merge with the receiver's records and the harness replies.
+        recorded = [dict(row, seq=None) for row in self.trace.rows]
         try:
-            self.receiver = SinkReceiver().start()
-            self.state_dir = tempfile.TemporaryDirectory(prefix="riemann-arena-")
-            self.listen_addr = f"127.0.0.1:{free_port()}"
-            self.adapter = Adapter(
-                command=self.command,
-                listen_addr=self.listen_addr,
-                ntfy_url=self.receiver.ntfy_url,
-                ntfy_topic=self.plan.get("ntfy_topic", "arena"),
-                influx_url=self.receiver.influx_url,
-                log_path=str(Path(self.state_dir.name) / "riemannd.log"),
-                state_dir=self.state_dir.name,
-                config=self.plan.get("config") or {},
-            )
-            self.adapter.start()
-            deadline = time.monotonic() + self.ready_timeout
-            while time.monotonic() < deadline:
-                if self.adapter.ready():
-                    self.started = True
-                    break
-                if self.adapter.exited() is not None:
-                    break
-                time.sleep(0.2)
-            if not self.started:
-                self.category = "start_error"
-                raise RuntimeError("riemannd did not become ready before the timeout")
-            for rule in self.plan.get("rules") or []:
-                self._put_rule(rule["id"], rule)
-            self.t0 = time.time()
-        except Exception as exc:
-            self.fail(exc)
-            raise
+            rows = observer.build_trace(self.records, self.events + recorded)
+        except Exception as exc:  # a malformed body must not look like a clean fail
+            rows = []
+            self.category, self.error = "observer_error", f"trace build failed: {exc}"
+        with self.trace.lock:
+            self.trace.rows = rows
 
-    def step(self, step: Dict[str, Any]) -> None:
-        if self.closed:
-            raise ValueError("actions cannot follow final trace assertions")
-        try:
-            sleep_for = self.t0 + float(step["at"]) - time.time()
-            if sleep_for > 0:
-                time.sleep(sleep_for)
-            self._apply(step)
-        except Exception as exc:
-            self.fail(exc)
-            raise
-
-    # ---- stimulus ----------------------------------------------------------
+    # ---- stimulus ------------------------------------------------------------
 
     def _record_ingest(self, response) -> None:
         status, _, body = response
@@ -174,17 +188,10 @@ class Session:
             self.receiver.set_delay(step["sink"], float(step["seconds"]))
         elif op == "sink_fail":
             self.receiver.set_fail(step["sink"], step["status"])
-        else:
-            raise ValueError("unknown stimulus op: " + repr(op))
-
-    # ---- settle and grade ----------------------------------------------------
 
     def _read_rule_counters(self) -> None:
-        """After settle, ask each seeded rule whether any node passed an event.
-
-        Failure classification only. Nothing asserts on it.
-        """
-        for rule in self.plan.get("rules") or []:
+        """Ask each seeded rule whether any node passed an event. Nothing asserts on it."""
+        for rule in self.scenario.get("rules") or []:
             try:
                 status, _, body = self.adapter.get_rule(rule["id"])
             except Exception:
@@ -196,49 +203,13 @@ class Session:
             self.events.append(observer.rule_response_event(
                 time.time(), "get", rule["id"], status, None, fired=fired))
 
-    def close(self) -> None:
-        if self.closed:
-            return
-        self.closed = True
-        try:
-            if self.started and not self.category:
-                time.sleep(float(self.plan.get("settle", 5)))
-                if self.adapter.exited() is not None:
-                    self.category = "process_error"
-                    raise RuntimeError("riemannd exited during the trial")
-                self._read_rule_counters()
-        except Exception as exc:
-            self.fail(exc)
-        finally:
-            try:
-                if self.adapter:
-                    self.adapter.stop()
-                    log_path = Path(self.adapter.log_path)
-                    if log_path.exists():
-                        self.log = log_path.read_text(errors="replace")
-            finally:
-                try:
-                    if self.receiver:
-                        self.records = self.receiver.records()
-                        self.receiver.stop()
-                finally:
-                    if self.state_dir:
-                        self.state_dir.cleanup()
-        try:
-            self.rows = observer.build_trace(self.records, self.events)
-        except Exception as exc:  # a malformed body must not look like a clean fail
-            self.rows = []
-            self.category, self.error = "observer_error", f"trace build failed: {exc}"
+    # ---- grade ---------------------------------------------------------------
 
-    def trace(self) -> List[Dict[str, Any]]:
-        return json.loads(json.dumps(self.rows))
-
-    def report(self) -> Dict[str, Any]:
-        self.close()
-        rows = self.rows
-        ok, assertions = evaluate(self.plan.get("expect", {"trace": {}}), rows)
+    def report(self):
+        report = super().report()
+        rows = self.trace.rows
         checks = {f"{op}[{i}]": {"ok": item["ok"]}
-                  for op, items in assertions.items() for i, item in enumerate(items)}
+                  for op, items in report["assertions"].items() for i, item in enumerate(items)}
         events_admitted = any(e.get("event") == "ingest_response" and (e.get("accepted") or 0) > 0 for e in rows)
         puts = [e for e in rows if e.get("event") == "rule_response" and e.get("kind") == "put"]
         rules_registered = (not puts) or any(200 <= (e.get("status") or 0) < 300 for e in puts)
@@ -254,36 +225,22 @@ class Session:
             predicate_results=checks,
         )
         # A session failure the score cannot see (a step that raised, a process
-        # that exited, a scenario with no final assertion) is the category.
-        category = score["category"]
-        if self.category and self.category not in ("predicate_violation",):
-            category = self.category
+        # that exited, a scenario with no final assertion) stays the category.
+        category = self.category if self.category not in (None, "predicate_violation") else score["category"]
         if category == "GREEN" and not checks:
             category = "invalid_scenario"
         score["category"] = category
         score["overall"] = 1.0 if category == "GREEN" else 0.0
-        report = {
-            "scenario": self.plan.get("name"),
+        report.update({
             "category": category,
             "ok": category == "GREEN",
-            "error": self.error,
             "score": score,
-            "assertions": assertions,
-            "assertions_passed": score["assertions_passed"],
-            "assertions_total": score["assertions_total"],
-            "settle_seconds": float(self.plan.get("settle", 5)),
+            "settle_seconds": float(self.scenario.get("settle", SETTLE_SECONDS)),
             "wall_clock_seconds": round(time.time() - self.wall_start, 3),
             "sink_request_count": len(self.records),
             "sink_receiver": self.receiver.base_url if self.receiver else None,
-            "listen_addr": self.listen_addr,
-            "command": self.command,
-            "plan_sha256": hashlib.sha256(json.dumps(self.plan, sort_keys=True).encode()).hexdigest(),
-            "warnings": self.warnings,
-            "evidence": "sink-receiver observations over loopback HTTP plus harness-emitted replies",
-        }
+            "listen_addr": self.adapter.listen if self.adapter else None,
+            "build_binding": self.binding,
+        })
         (self.out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-        (self.out / "trace.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
-        # The diagnostician reads the whole log; written even when empty so an
-        # absent file means the run did not get that far.
-        (self.out / "candidate.log").write_text(self.log)
         return report

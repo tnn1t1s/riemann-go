@@ -22,7 +22,7 @@ Validation does not assert on riemann-go's HTTP replies. It asserts on what arri
 - [`COVERAGE.md`](./COVERAGE.md): which SPEC.md property each scenario covers, and what nothing covers.
 - [`knowledge/INDEX.md`](./knowledge/INDEX.md): pointers to the authoritative documents a generator should read.
 - `features/`: the Gherkin corpus: eleven development scenarios, and fifteen held out under `features/holdout/`.
-- `harness/`: the riemannd adapter, the observer, the session and the step table. The receiver, matcher and generation scripts come from [riemann-harness](https://github.com/tnn1t1s/riemann-harness).
+- `harness/`: the riemannd flags, the observer, the session hooks and the stimulus step table. The receiver, matcher, session lifecycle, pytest-bdd arena and generation scripts come from [riemann-harness](https://github.com/tnn1t1s/riemann-harness).
 - `releases/`: generated artifacts at three trust levels.
 - [`probes/`](./probes/): standalone programs that measured one design question each. Evidence, not product code; nothing under it is imported by the server.
 

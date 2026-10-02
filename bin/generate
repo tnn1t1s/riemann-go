@@ -1,51 +1,21 @@
 #!/usr/bin/env python3
-"""Generate a riemannd candidate from the specification through riemann-generate.
+"""Generate a riemannd candidate through riemann-generate with riemann-go's inputs.
 
-This wrapper names riemann-go's generator inputs, prompt and manifest contract
-and hands them to the shared console script, which prepares a pinned input
-directory, runs the configured agent command with the prompt on stdin, checks
-the inputs were not changed, verifies the build manifest against the artifact
-and the SPEC.md bytes, and publishes service, build-manifest.json and SPEC.md
-into the build directory. Attempt evidence stays under <build>/generations/.
-
-The generator's reading order is fixed in bin/prompt.md; INPUTS below is the
-set of files that order names. Nothing from features/, harness/ or tests/ is
-copied.
+The shared script prepares a pinned input directory, runs the agent command
+from the JSON argv file with the prompt on stdin, checks that no input byte
+changed, verifies output/build-manifest.json against output/service and the
+SPEC.md bytes, and publishes service, build-manifest.json and SPEC.md into the
+build directory. Attempt evidence stays under <build>/generations/.
 """
-import argparse
-import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-CONTRACT = 'riemann-go/spec-v1'
-PROMPT = 'bin/prompt.md'
-INPUTS = ['SPEC.md', 'SEMANTICS.md', 'SCALE.md', 'INVARIANTS.md', 'knowledge/INDEX.md']
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from harness.inputs import INPUTS, PROMPT, ROOT, arguments
+from riemann_harness.generate import main
 
-p = argparse.ArgumentParser(description=__doc__)
-p.add_argument('--model', required=True, help='Exact model identifier; recorded in the manifest')
-p.add_argument('--command-file', required=True, help='JSON argv array for the coding agent; {model} is substituted')
-p.add_argument('--build-dir', required=True)
-a = p.parse_args()
-
-missing = [name for name in INPUTS + [PROMPT] if not (ROOT / name).is_file()]
+missing = [name for name in INPUTS if not (ROOT / name).is_file()] + ([] if PROMPT.is_file() else [str(PROMPT)])
 if missing:
-    p.error('missing generator input: ' + ', '.join(missing)
-            + '. The reading order is fixed in bin/prompt.md; write the document or remove it there.')
-
-# The console script installed beside this interpreter, else on PATH.
-script = Path(sys.executable).parent / 'riemann-generate'
-if not os.access(script, os.X_OK):
-    found = shutil.which('riemann-generate')
-    if not found:
-        p.error('riemann-generate not found beside ' + sys.executable + ' or on PATH; install riemann-harness')
-    script = Path(found)
-
-args = [str(script), '--model', a.model, '--command-file', str(Path(a.command_file).resolve()),
-        '--build-dir', str(Path(a.build_dir).resolve()), '--root', str(ROOT),
-        '--prompt', PROMPT, '--contract', CONTRACT, '--spec', 'SPEC.md']
-for name in INPUTS:
-    args += ['--input', name]
-raise SystemExit(subprocess.call(args, cwd=ROOT))
+    sys.exit('bin/generate: missing generator input: ' + ', '.join(missing)
+             + '. The reading order is fixed in bin/prompt.md; write the document or remove it there.')
+sys.exit(main(sys.argv[1:] + arguments()))
