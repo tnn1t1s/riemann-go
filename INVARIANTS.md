@@ -124,7 +124,7 @@ The generator reads `SPEC.md`, `SEMANTICS.md`, `SCALE.md`, `INVARIANTS.md` and `
 
 Looking at a held-out scenario consumes it. Once its failure has informed a spec edit it moves permanently into `features/` and a replacement is written, because it is now part of what the spec was fitted to.
 
-**Acid test.** Grep the generator's reading order in `bin/prompt.md` and the input list in `bin/generate` for `HARNESS`, `features` or `holdout`. Any hit is a violation. Then check that `bin/trial` collects `features/holdout/` only under `--holdout`, so the held-out set never enters a development iteration. Then check that every file in `features/holdout/` is absent from `HARNESS.md`.
+**Acid test.** Grep the generator's reading order in `bin/prompt.md` and the input list in `harness/inputs.py`, which is where `INPUTS` lives and which `bin/generate` imports, for `HARNESS`, `features` or `holdout`. Any hit is a violation. Then check that `bin/trial` collects `features/holdout/` only under `--holdout`, so the held-out set never enters a development iteration. Then check that every file in `features/holdout/` is absent from `HARNESS.md`.
 
 ## Audit checklist for a candidate generation
 

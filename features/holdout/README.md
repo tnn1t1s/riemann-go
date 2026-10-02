@@ -12,7 +12,7 @@ That is the ordinary reason for a held-out set, and the ordinary rules apply.
 
 1. **Nothing here is read while editing `SPEC.md`, `SEMANTICS.md`, `SCALE.md` or `INVARIANTS.md`.** Not the assertions, not the failure output, not the trace. Reading one to decide a spec edit consumes it.
 
-2. **Nothing here appears in `HARNESS.md`'s worked examples**, and `HARNESS.md` is not in the generator's reading order at all. The generator is told what it must do, never which cases are checked.
+2. **No document the generator reads names a scenario held out here.** The reading order is `harness/inputs.py`'s `INPUTS` plus `bin/prompt.md`; the generator is told what it must do, never which cases are checked. `HARNESS.md` is not in that order at all and its worked examples name none of these, and `COVERAGE.md` may list them because nothing hands it to the generator either. Stated this way, the next document that wants a coverage table is answered by the rule rather than by a review.
 
 3. **`bin/trial` runs `features/*.feature` only.** The held-out set is collected only with `--holdout`, at promotion, and its result is recorded in the release manifest.
 
