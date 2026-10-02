@@ -19,7 +19,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('case', help='Trial case directory holding report.json, trace.jsonl and candidate.log')
-p.add_argument('--max-turns', type=int, default=15)
+p.add_argument('--max-turns', type=int, default=15,
+               help='Cap on the diagnostician\'s tool-use turns, which bounds how much it '
+                    'reads before it is cut off. Provisional default 15: the six inputs it is '
+                    'handed cost six reads, leaving nine for grepping SPEC.md, and no diagnosis '
+                    'run has been measured against this cap yet. A truncated diagnosis ends '
+                    'without the verdict line the prompt asks for, naming no property; raise the '
+                    'cap and re-run rather than treating the case as undiagnosable.')
 a = p.parse_args()
 case = Path(a.case).resolve()
 paths = {
