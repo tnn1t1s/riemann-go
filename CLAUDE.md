@@ -16,25 +16,24 @@ You do not need to memorize them. Re-read whichever one bears on the judgment in
 ## The loop
 
 ```
-generate riemannd   → bin/generate            (claude -p with bin/prompt.md)
-build                → go build
-trial each scenario  → the harness            (Python; deterministic)
-read score           → reports/<scenario>-iter<n>.json
+generate riemannd   → bin/generate            (agent-command.json with bin/prompt.md on stdin; the agent builds)
+trial each scenario  → bin/trial              (pytest-bdd over features/; deterministic)
+read score           → <build>/reports/summary.json and <case>/report.json
 if every scenario GREEN → promote to releases/candidates/, stop
 if any failed        → diagnose the first failure
-diagnose             → bin/diagnose           (claude -p with bin/diagnose-prompt.md)
-read diagnosis       → reports/diagnosis-<...>.md
+diagnose             → bin/diagnose <case>    (claude -p with bin/diagnose-prompt.md)
+read diagnosis       → <case>/diagnosis-<timestamp>.md
 act                  → edit SPEC.md, or add a scenario, or accept the roll
-loop                 → up to MAX_ITER (default 3), then NEEDS-HUMAN
+loop                 → up to --max-iter (default 3), then NEEDS-HUMAN
 ```
 
-`bin/iterate` runs the whole thing. The bash is deterministic and dumb. The two `claude -p` invocations are the only places reasoning happens, and they run in separate contexts so the generator cannot rationalize a past failure and the diagnostician cannot be biased by the implementation.
+`bin/iterate --model <id>` runs the whole thing. The orchestration is deterministic and dumb. The two agent invocations are the only places reasoning happens, and they run in separate contexts so the generator cannot rationalize a past failure and the diagnostician cannot be biased by the implementation.
 
 **There is no cluster.** The oracle is the harness's own sink receiver plus its read probes against the running binary, so a trial takes seconds rather than a minute. That changes what is affordable: running the corpus is cheap enough that there is never a reason to guess at a behavior you could measure, and a scenario that isolates one property is a better answer than a longer argument about what the spec meant.
 
 ## Roles and their contexts
 
-**Generator** (`bin/generate`) reads `SPEC.md`, `SCALE.md`, `INVARIANTS.md`, `HARNESS.md` and `knowledge/INDEX.md`, and writes Go. It knows nothing about prior runs. There is no feedback side-channel, deliberately: a fix carried outside the spec regresses at the next generation, and a fix pinned in the spec never does.
+**Generator** (`bin/generate`) reads `SPEC.md`, `SEMANTICS.md`, `SCALE.md`, `INVARIANTS.md` and `knowledge/INDEX.md`, copied into a prepared directory with their digests recorded, and writes Go. It knows nothing about prior runs. There is no feedback side-channel, deliberately: a fix carried outside the spec regresses at the next generation, and a fix pinned in the spec never does.
 
 **Diagnostician** (`bin/diagnose`) reads the spec, the failing scenario, the trace, the matcher report and the riemannd log tail. It does not read the generated source. Its output names the failed assertion, what the trace shows instead, and exactly one of four moves.
 
@@ -53,7 +52,7 @@ loop                 → up to MAX_ITER (default 3), then NEEDS-HUMAN
 | Category | What it means | Default action |
 | --- | --- | --- |
 | `observer_error` | The harness could not read what it needed | Stop. The generation is unjudged. Fix the oracle; do not blame the generator. |
-| `compile_error` | `go build` failed | Read the errors. Wrong dependency or wrong layout is a spec gap. A type error inside one package is a bad roll; regenerate. |
+| generation failed | the agent exited nonzero or produced no bound artifact | Read `agent.log` under `build/generations/`. Wrong dependency or wrong layout is a spec gap. A type error inside one package is a bad roll; regenerate. |
 | `start_error` | Built but never became ready | Usually startup wiring the spec under-specifies: flag names, required configuration, listen address. Diagnose, then pin it. |
 | `ingest_error` | Ready but events were not admitted | The ingest contract is under-specified: batch shape, status codes, the response body. Edit SPEC.md. |
 | `rule_error` | Events admitted but no rule ever fired | The rule document schema or the compiler contract is under-specified. Edit SPEC.md. |
@@ -61,7 +60,7 @@ loop                 → up to MAX_ITER (default 3), then NEEDS-HUMAN
 | `predicate_violation` | The pipeline ran and the assertions did not hold | A real behavioral failure. Diagnose. Could be a spec gap or a bad roll. |
 | `GREEN` | Every assertion passed | Promote to `releases/candidates/<gen-id>/`. |
 
-The categories between `compile_error` and `sink_error` are spec gaps until proven otherwise. If three consecutive generations land in the same category for the same reason, the spec is wrong and regenerating a fourth time is not a plan.
+The categories between a failed generation and `sink_error` are spec gaps until proven otherwise. If three consecutive generations land in the same category for the same reason, the spec is wrong and regenerating a fourth time is not a plan.
 
 ## Edit the spec, add a scenario, or regenerate
 
@@ -108,13 +107,13 @@ held-out pass rate, not the note table.
 
 ## The held-out set
 
-`scenarios/holdout/` runs at promotion and never during development. You do not read its assertions, its failures or its traces while deciding what a specification document should say. `scenarios/holdout/README.md` has the rules; the short version is that the thing which overfits here is the spec, so a corpus that drives every spec edit cannot also be the evidence that the spec generalises.
+`features/holdout/` runs at promotion and never during development. You do not read its assertions, its failures or its traces while deciding what a specification document should say. `features/holdout/README.md` has the rules; the short version is that the thing which overfits here is the spec, so a corpus that drives every spec edit cannot also be the evidence that the spec generalises.
 
 Three consequences for you as orchestrator:
 
-Green across `scenarios/` is not validation. It says the spec was edited until the visible cases passed. Promotion to `releases/validated/` needs both sets green, with both sets of reports kept.
+Green across `features/` is not validation. It says the spec was edited until the visible cases passed. Promotion to `releases/validated/` needs both sets green, with both sets of reports kept.
 
-A held-out failure is a finding about the spec's generality, and it is the most valuable output this repository produces. Record it. Acting on it costs the scenario: it moves into `scenarios/` permanently and you write a replacement, because once a failure has informed a spec edit that case is part of what the spec was fitted to.
+A held-out failure is a finding about the spec's generality, and it is the most valuable output this repository produces. Record it. Acting on it costs the scenario: it moves into `features/` permanently and you write a replacement, because once a failure has informed a spec edit that case is part of what the spec was fitted to.
 
 When you write a replacement, write it from `SPEC.md` and `SEMANTICS.md`, never by reading a generated tree. A scenario derived from an implementation asserts what that generation happens to do.
 
@@ -142,7 +141,7 @@ Nothing skips a level. Promotion to `validated/` requires the harness run in han
 
 ## Where to look when stuck
 
-`failures/promoted/` holds past failures encoded as scenarios, each with a note on why the property is in the corpus. `releases/candidates/*/manifest.json` holds the three pins and the per-scenario verdicts. `traces/*.jsonl` is substrate evidence, worth reading directly when a diagnosis feels wrong. `reports/*.json` has the per-assertion matcher outcomes. `probes/` holds the five design probes and their observations, which are where several of the spec's defaults come from.
+`failures/promoted/` holds past failures encoded as scenarios, each with a note on why the property is in the corpus. `releases/*/*/manifest.json` holds the pins and the per-scenario verdicts. Each trial case directory holds `trace.jsonl`, substrate evidence worth reading directly when a diagnosis feels wrong, and `report.json` with the per-assertion matcher outcomes. `probes/` holds the five design probes and their observations, which are where several of the spec's defaults come from.
 
 If a decision from an earlier session matters, it is in one of those. The conversation is not.
 

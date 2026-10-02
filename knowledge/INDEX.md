@@ -25,7 +25,7 @@ What the emitters already send, and what the existing sink already does. The spe
 
 | Path | What to read it for |
 | --- | --- |
-| `~/Developer/riemann-atlas/VOCABULARY.md` | The emitter contract: cumulative counters, no content, fire-and-forget. Its rule that emission never affects the agent is why backpressure here means shedding and counting rather than blocking a caller. |
+| `~/Developer/riemann-agent-obs/VOCABULARY.md` | The emitter contract: cumulative counters, no content, fire-and-forget. Its rule that emission never affects the agent is why backpressure here means shedding and counting rather than blocking a caller. |
 | `~/Developer/pyntfy/docs/metrics.md` | The names, kinds, cadences and TTLs the ntfy listeners emit, including the 30 second heartbeat with a 90 second TTL that makes expiry the alert rather than the beat. |
 | `~/Developer/riemann/src/riemann/ntfy.clj` | The fleet's current ntfy sink, including the state-to-priority mapping that `SPEC.md` keeps normative. |
 

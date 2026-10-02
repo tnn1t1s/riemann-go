@@ -1,122 +1,21 @@
-#!/usr/bin/env bash
-# Generate a riemann-go implementation from the spec using claude -p.
-#
-# Usage:
-#   bin/generate [target_dir]
-#   MODEL=<model-id> bin/generate [target_dir]
-#   bin/generate --help
-#
-#   target_dir defaults to scratch/gen-<timestamp>, or scratch/gen-<timestamp>-<model>
-#   when MODEL is set.
-#
-# The model is one of the three reproducibility pins, so it is recorded in
-# manifest.json beside the spec SHA and the prompt SHA. Leaving MODEL unset
-# uses whatever the CLI defaults to, which pins nothing; set it for any run
-# whose result will be compared with another.
-#
-# The spec is the only input. There is no feedback side-channel: no FEEDBACK.md,
-# no "last time you got X wrong" note, no prior generation on disk for the
-# generator to read. When a generation has a defect the fix lands in SPEC.md, in
-# INVARIANTS.md, or in a new scenario, and the next generation is produced from
-# the updated spec.
-#
-# Why: cue ran ten iterations of one generation with an out-of-band feedback
-# channel. Every fix carried outside the spec regressed at the next regeneration;
-# every fix pinned in the spec held. A side-channel makes the artifact depend on
-# conversation history, and conversation history is not a build input.
+#!/usr/bin/env python3
+"""Generate a riemannd candidate through riemann-generate with riemann-go's inputs.
 
-set -euo pipefail
+The shared script prepares a pinned input directory, runs the agent command
+from the JSON argv file with the prompt on stdin, checks that no input byte
+changed, verifies output/build-manifest.json against output/service and the
+SPEC.md bytes, and publishes service, build-manifest.json and SPEC.md into the
+build directory. Attempt evidence stays under <build>/generations/.
+"""
+import sys
+from pathlib import Path
 
-usage() {
-  sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from harness.inputs import INPUTS, PROMPT, ROOT, arguments
+from riemann_harness.generate import main
 
-if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-  usage
-  exit 0
-fi
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR")"
-
-PROMPT_TEMPLATE="$REPO_DIR/bin/prompt.md"
-
-# Everything the prompt tells the generator to read must exist before we spend a
-# generation. A missing spec document is a stop, not a default: generating
-# against a partial reading order produces an artifact nobody can attribute.
-REQUIRED=(
-  "$REPO_DIR/SPEC.md"
-  "$REPO_DIR/SEMANTICS.md"
-  "$REPO_DIR/SCALE.md"
-  "$REPO_DIR/INVARIANTS.md"
-  "$REPO_DIR/knowledge/INDEX.md"
-  "$PROMPT_TEMPLATE"
-)
-
-missing=0
-for f in "${REQUIRED[@]}"; do
-  if [ ! -f "$f" ]; then
-    echo "bin/generate: missing required input: $f" >&2
-    missing=1
-  fi
-done
-if [ "$missing" -ne 0 ]; then
-  echo "bin/generate: the generator's reading order is fixed in bin/prompt.md." >&2
-  echo "Write the missing document, or remove it from the reading order there." >&2
-  exit 2
-fi
-
-if ! command -v claude >/dev/null 2>&1; then
-  echo "bin/generate: 'claude' not on PATH; the generator cannot run." >&2
-  exit 2
-fi
-
-MODEL="${MODEL:-}"
-if [ -n "$MODEL" ]; then
-  DEFAULT_TARGET="$REPO_DIR/scratch/gen-$(date +%Y%m%d-%H%M%S)-$(printf '%s' "$MODEL" | tr -c 'A-Za-z0-9._-' '-')"
-else
-  DEFAULT_TARGET="$REPO_DIR/scratch/gen-$(date +%Y%m%d-%H%M%S)"
-fi
-TARGET="${1:-$DEFAULT_TARGET}"
-mkdir -p "$TARGET"
-
-PROMPT="$(sed "s|__SPEC_PATH__|$REPO_DIR|g" "$PROMPT_TEMPLATE")"
-
-SPEC_SHA="$(cd "$REPO_DIR" && git rev-parse HEAD:SPEC.md 2>/dev/null || echo unknown)"
-PROMPT_SHA="$(printf '%s' "$PROMPT" | shasum -a 256 | cut -d' ' -f1)"
-
-echo "Generating riemann-go into: $TARGET"
-echo "Spec:                       $REPO_DIR/SPEC.md"
-echo "Spec SHA:                   $SPEC_SHA"
-echo "Prompt SHA:                 $PROMPT_SHA"
-echo "Model:                      ${MODEL:-<cli default, unpinned>}"
-echo
-
-cd "$TARGET"
-
-MODEL_ARGS=()
-[ -n "$MODEL" ] && MODEL_ARGS=(--model "$MODEL")
-
-claude -p "$PROMPT" \
-  "${MODEL_ARGS[@]}" \
-  --permission-mode acceptEdits \
-  --allowedTools "Read,Write,Edit,Bash" \
-  --max-turns 60
-
-echo
-echo "Generated tree at: $TARGET"
-echo "Files:"
-find "$TARGET" -type f -name '*.go' | head -50
-echo
-cat > "$TARGET/manifest.json" <<JSON
-{
-  "spec_sha": "$SPEC_SHA",
-  "prompt_sha": "$PROMPT_SHA",
-  "model": "${MODEL:-unpinned}",
-  "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "note": "Input-reproducible, not output-reproducible: these pins fix the inputs to a sampled model, not the artifact."
-}
-JSON
-
-echo "SPEC-GAP notes:"
-grep -rn "SPEC-GAP:" "$TARGET" || echo "  (none)"
+missing = [name for name in INPUTS if not (ROOT / name).is_file()] + ([] if PROMPT.is_file() else [str(PROMPT)])
+if missing:
+    sys.exit('bin/generate: missing generator input: ' + ', '.join(missing)
+             + '. The reading order is fixed in bin/prompt.md; write the document or remove it there.')
+sys.exit(main(sys.argv[1:] + arguments()))

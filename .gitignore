@@ -2,23 +2,23 @@ probes/*/probe[0-9]
 probes/**/__pycache__/
 probes/**/*.log
 
-# Generations in progress. A generation that passes moves into releases/; one
-# that does not stays here with its report and its trace, uncommitted.
+# Generations in progress and loop output. A generation that passes is
+# promoted into releases/; one that does not stays here with its evidence.
 scratch/*
 !scratch/.gitkeep
+/build/
+/build-*/
 
-# Built binaries. The binary belonging to a release is committed inside that
-# release directory; nothing else is.
+# Built binaries. The binaries belonging to a release are GitHub release
+# assets; nothing else is committed.
 riemannd
 
-# Working reports and traces. These are read constantly during a loop and are
-# worthless a week later. The evidence that outlives a run is copied into
-# releases/<gen-id>/ when a candidate lands, or into failures/promoted/ when a
-# failure becomes a scenario.
+# Trial output. Evidence that outlives a run is copied into releases/<trust>/<gen-id>/
+# when a candidate lands, or into failures/promoted/ when a failure becomes a scenario.
 reports/*
 !reports/.gitkeep
-traces/*
-!traces/.gitkeep
 
 .venv/
-harness/**/__pycache__/
+__pycache__/
+*.pyc
+.pytest_cache/
