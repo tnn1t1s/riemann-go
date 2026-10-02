@@ -12,8 +12,10 @@ up with no plumbing.
 Early stops:
   observer_error  the oracle misread; the generation is unjudged and
                   continuing would charge a harness defect to the generator.
-  DEGRADED        fewer scenarios passed than in the previous iteration; the
-                  edits landed between iterations made it worse.
+  DEGRADED        fewer scenarios passed than in the last iteration that
+                  reached a verdict; the edits landed between iterations made
+                  it worse. An iteration that failed to build does not move
+                  the baseline.
 """
 import argparse
 import json
@@ -41,7 +43,9 @@ for i in range(1, a.max_iter + 1):
         print(f'\ncompile_error at iteration {i}: generation did not produce a bound artifact.\n'
               f'Read the newest agent.log under {build / "generations"}. A dependency or layout error\n'
               'is usually a spec gap; a type error inside one package is usually a bad roll.')
-        prev_passed = 0
+        # prev_passed is left alone: an iteration that produced no verdict is
+        # not a measurement, and zeroing the baseline here would hide the next
+        # iteration's regression against the last iteration that did pass.
         continue
     print('\n[trial]', flush=True)
     subprocess.call([sys.executable, str(ROOT / 'bin/test-build'), '--build-dir', str(build)])
@@ -63,7 +67,8 @@ for i in range(1, a.max_iter + 1):
               f'see GENERATE.md for the release layout\n{"=" * 64}')
         sys.exit(0)
     if prev_passed >= 0 and passed < prev_passed:
-        print(f'\n{"=" * 64}\nDEGRADED at iteration {i}: {prev_passed} passed, now {passed}\n'
+        print(f'\n{"=" * 64}\nDEGRADED at iteration {i}: {prev_passed} passed at the last'
+              f' iteration that reached a verdict, now {passed}\n'
               'The edits landed between iterations made it worse. Stop and read them\n'
               f'before generating again.\n{"=" * 64}')
         sys.exit(4)
