@@ -24,7 +24,7 @@ Without an external arena, every generated system grades itself, and the grade m
 
 ## Architecture in one sentence
 
-**The sink receiver is the oracle. A generation of riemann-go is only a hypothesis. The generator is `claude -p`. The build is iterative.**
+**The sink receiver is the oracle. A generation of riemann-go is only a hypothesis. The generator is a coding agent the build invokes. The build is iterative.**
 
 ## Why this oracle is honest
 
@@ -52,17 +52,17 @@ There is a partial escape that the spec uses where it can. Expiry, which is an i
 
 3. **`SCALE.md`** — backpressure and scale floors written as behavior, with every parameter named at its owning layer and every default carrying its reason.
 
-4. **`scenarios/*.yaml`** — declarative tests. Each names a timeline of stimuli and a set of expectations over the trace. Expectations assert on what the sink receiver observed, and on harness-emitted events only where the sink is blind.
+4. **`features/*.feature`** — Gherkin scenarios, one per property. Each names a timeline of stimuli and a set of assertions over the trace, carried as JSON doc strings. Assertions hold on what the sink receiver observed, and on harness-emitted events only where the sink is blind. `features/holdout/` is the held-out set, run at promotion only.
 
-5. **`harness/`** — drives riemann-go, runs the sink receiver, evaluates expectations. Three responsibilities kept apart: stimulus, which adapts per generation and drives the HTTP surface; observation, which is the sink receiver and knows nothing about riemann-go's internals; and matching, which applies a scenario's expectations to the trace with generic operators only.
+5. **`harness/`** and the shared package **`riemann_harness`** — drive riemann-go, run the sink receiver, evaluate assertions. Three responsibilities kept apart: stimulus, which adapts per generation and drives the HTTP surface; observation, which is the sink receiver and knows nothing about riemann-go's internals; and matching, which applies a scenario's assertions to the trace with generic operators only. The receiver, the matcher, the score categories and the generation scripts live in the package, shared with riemann-graph and riemann-atlas; the adapter, the observer and the step table are this repository's.
 
-6. **`releases/`** — append-only generated artifacts at three trust levels, each carrying the generated source tree, the built binary, the trace, and a manifest pinning the spec hash, the model id, the prompt hash and the validation run.
+6. **`releases/`** — append-only generated artifacts at three trust levels, each carrying the generated source tree, the trial reports, the preparation manifest pinning input digests, model and prompt, and the build manifest binding the binaries to the SPEC.md bytes. The binaries themselves are GitHub release assets.
 
 ## The two design moves
 
 ### Move 1: spec-as-source
 
-No Go source is checked in at the repo root. The implementation is regenerated from the specification documents by `claude -p`.
+No Go source is checked in at the repo root. The implementation is regenerated from the specification documents by a coding agent whose exact command is `agent-command.json`.
 
 The spec stays canonical as a result. A bug fix is a spec edit, a fork is a spec diff, and regenerating against a better model produces a better implementation with no spec change at all.
 
@@ -78,38 +78,38 @@ This frees the generator on everything the spec does not pin, and it makes anti-
 
 ```
 SPEC.md ─────┐
-INVARIANTS.md├──► bin/prompt.md ──► claude -p ──► generated Go module ──► go build ──► riemannd
-SCALE.md ────┤                                                                          │
+SEMANTICS.md ├──► prepared input dir ──► agent-command.json ──► output/src ──► go build ──► service + 3 assets
+SCALE.md ────┤    (digests in manifest.json)                                       + build-manifest.json
+INVARIANTS.md│                                                                          │
 knowledge/ ──┘                                                                          │
                                                                                         ▼
-                            scenarios/*.yaml ──► harness ──► drive riemannd
-                                                      │            │
-                                                      │            ▼
-                                                      │      sink receiver records
-                                                      │      ntfy + influx requests
-                                                      ▼            │
-                                                 trace.jsonl ◄─────┘
+                            features/*.feature ──► pytest-bdd ──► drive service
+                                                      │               │
+                                                      │               ▼
+                                                      │         sink receiver records
+                                                      │         ntfy + influx requests
+                                                      ▼               │
+                                                 trace.jsonl ◄────────┘
                                                       │
                                                       ▼
-                                              pass/fail per scenario
+                                           report.json per scenario, junit.xml
 ```
 
-`bin/generate` creates a target directory, substitutes the spec paths into the prompt template, and runs `claude -p` with tools restricted to reading, writing and building. The generator's brief includes a `CLAUDE.md` placed in the target directory, describing the evaluation regime: what gets compiled, what scenarios run, what the sink receiver records. The generator writes for the test it knows is coming.
+`cmake --build build` runs `bin/generate`, which hands riemann-go's input list, prompt and manifest contract to `riemann-generate`. That script copies the inputs into a fresh attempt directory, records their digests, runs the agent command with the prompt on stdin and the attempt directory as its working directory, checks afterwards that no input byte changed, verifies the agent's `build-manifest.json` against the artifact and the SPEC.md bytes, and publishes the artifact into `build/`. CMake tracks the inputs, so an unchanged build spends no model call and a changed SPEC.md triggers a new attempt. `ctest` then runs `bin/trial` over the development corpus against that artifact and nothing else. GENERATE.md has the recipe.
 
 ## The self-improvement loop
 
 ```
-loop until score == 1.0 or iteration == N:
-  generate  riemann-go  via claude -p (generator role)
-  build                 via go build
-  validate              via the harness running the scenario corpus
-  score                 per the function below
-  if score < 1.0:
-    diagnose  failure   via claude -p (diagnostician role, separate context)
+loop until every scenario is GREEN or iteration == N:
+  generate  riemann-go  via bin/generate (generator role, the agent command)
+  validate              via bin/trial over features/
+  read                  summary.json
+  if any scenario is not GREEN:
+    diagnose  failure   via bin/diagnose (diagnostician role, separate context)
     act on the diagnosis by editing a spec document or adding a scenario
 ```
 
-Two roles, deliberately split into separate `claude -p` invocations with separate contexts.
+`bin/iterate` runs this. Two roles, deliberately split into separate agent invocations with separate contexts.
 
 - **Generator** reads the spec documents and `knowledge/INDEX.md`. Writes Go. Knows nothing about prior runs except what the spec says, because there is no feedback side channel: a fix carried outside the spec regresses at the next regeneration, and a fix pinned in the spec does not.
 - **Diagnostician** reads the spec, the failing scenario, the trace and the matcher report. Does not read the generated source on its first pass. It writes a behavioral diagnosis naming which expectation failed, what the trace says happened instead, and what kind of implementation mistake produces that pattern. Only after that diagnosis exists may a second pass read the source and write repair hints, which are hints and not corrections.
@@ -131,11 +131,11 @@ Failure categories the loop distinguishes:
 
 - **observer_error** — the sink receiver or the matcher itself failed, so the run says nothing about the generation. Highest priority; it short-circuits everything else and is a harness bug until proven otherwise.
 - **GREEN** — every expectation held.
-- **compile_error** — `go build` failed.
-- **start_error** — built but never reached `GET /healthz`, or crashed during the run.
+- **start_error** — never reached `GET /healthz`; **process_error** — exited during the run. A candidate that did not build is not a trial failure: `bin/generate` fails and CTest has no artifact to launch.
 - **ingest_error** — started and healthy, but `POST /events` never returned `202` for a well-formed batch.
-- **sink_silent_error** — ingest succeeded and no request ever reached the sink receiver, while the scenario expected at least one. Categorized only after the matcher has already failed.
-- **expectation_violation** — the pipeline worked and the wrong thing happened. This is the interesting category.
+- **sink_error** — ingest succeeded and no request ever reached the sink receiver, while the scenario expected at least one. Categorized only after the matcher has already failed.
+- **predicate_violation** — the pipeline worked and the wrong thing happened. This is the interesting category.
+- **bdd_error** and **invalid_scenario** — a step raised before a verdict, or the scenario reached no final assertion. Neither says anything about the generation.
 
 The distinction that matters most is `observer_error` against everything else: a harness bug must never be charged to a generation.
 
@@ -157,7 +157,7 @@ Scenario coverage is not product completeness. Blessing is where a human owns th
 
 Every discovered failure becomes a scenario, and every scenario becomes durable pressure that each later generation must survive.
 
-When a generation fails for a reason the corpus did not directly assert, the diagnosis writes a new scenario isolating the property whose violation produced the failure. That scenario lands under `scenarios/` and joins the corpus. The failing trace is archived under `failures/promoted/<scenario-name>.md` with the evidence, the spec gap it closed if there was one, and the generation that first surfaced it. There is no quarantine: the corpus is the contract.
+When a generation fails for a reason the corpus did not directly assert, the diagnosis writes a new scenario isolating the property whose violation produced the failure. That scenario lands under `features/` and joins the corpus. The failing trace is archived under `failures/promoted/<scenario-name>.md` with the evidence, the spec gap it closed if there was one, and the generation that first surfaced it. There is no quarantine: the corpus is the contract.
 
 This converts debugging into curriculum construction. A failure caught once and not encoded is a failure the next generation rediscovers.
 
@@ -192,6 +192,20 @@ That separation is what lets this hold its shape. The arena evolves slowly under
 - **Partial credit.** A scenario passes or it does not. A soft score would let a generation be mostly right about whether an alert fired.
 - **Multi-language targets.** Go is a hard constraint for operational reasons, not a parameter. A Rust riemann-go is a spec fork.
 - **Grading riemann-go against the Clojure original.** Upstream's `test/riemann/streams_test.clj` is the semantic reference for the combinators and it is pointed at from `knowledge/INDEX.md`, but it is prior art for the generator to read rather than an oracle the harness runs. Two servers being diffed against each other is a migration check, not an arena.
+
+## Tooling
+
+| Command | What it does |
+| --- | --- |
+| `bin/generate --model M --command-file F --build-dir D` | One generation attempt through `riemann-generate`; CMake's custom command. |
+| `bin/trial --command '[...]' --spec S --build-manifest B [--holdout] [-k] [-m]` | pytest-bdd over `features/`; writes `report.json`, `trace.jsonl`, `candidate.log` per case, `junit.xml` and `summary.json`. |
+| `bin/check` | Parses every feature through the step table without a candidate, then runs `tests/`. |
+| `bin/test-build --build-dir D` | The CTest adapter: `bin/trial` against the build's own artifact and manifests. |
+| `bin/iterate --model M` | The loop above, with the `observer_error` and DEGRADED early stops and the diagnostician on the first failure. |
+| `bin/diagnose <case-dir>` | The diagnostician over one case directory, read-only, in its own context. |
+| `bin/harvest [dir ...]` | `SPEC-GAP` and `SPEC-FREE` notes across attempts under `build*/generations/`, `scratch/` and `releases/candidates/`, clustered by a cheap model. |
+
+The diagnostician's command is still `claude -p` with `--allowedTools Read`; it is not yet read from a command file the way the generator's is.
 
 ## Open design questions
 

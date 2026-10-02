@@ -1,100 +1,55 @@
-#!/usr/bin/env bash
-# Run the diagnostician on a failing scenario run.
-#
-# Usage:
-#   bin/diagnose <scenario.yaml> <report.json> [<trace.jsonl>] [<riemannd.log>]
-#   bin/diagnose --help
-#
-# Invokes claude -p with the diagnostician prompt and read-only file access.
-# The diagnostician runs in its own context and does NOT read the generated
-# source: it reasons from the spec and from what the harness's sink receiver
-# observed. Writes the diagnosis to reports/diagnosis-<scenario>-<timestamp>.md
-# and prints it to stdout.
+#!/usr/bin/env python3
+"""Run the diagnostician on one failed trial case.
 
-set -euo pipefail
+Takes the case directory bin/trial wrote (report.json, trace.jsonl and
+candidate.log). Invokes `claude -p` with the diagnostician prompt and
+read-only file access, in its own context. The diagnostician does not read
+the generated source: it reasons from the spec, the feature file and what
+the sink receiver observed. The diagnosis is written beside the report as
+diagnosis-<timestamp>.md and printed.
+"""
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
 
-usage() {
-  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+ROOT = Path(__file__).resolve().parents[1]
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument('case', help='Trial case directory holding report.json, trace.jsonl and candidate.log')
+p.add_argument('--max-turns', type=int, default=15)
+a = p.parse_args()
+case = Path(a.case).resolve()
+paths = {
+    '__SPEC_PATH__': ROOT / 'SPEC.md',
+    '__HARNESS_PATH__': ROOT / 'HARNESS.md',
+    '__REPORT_PATH__': case / 'report.json',
+    '__TRACE_PATH__': case / 'trace.jsonl',
+    '__LOG_PATH__': case / 'candidate.log',
 }
-
-if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-  usage
-  exit 0
-fi
-
-if [ $# -lt 2 ]; then
-  usage >&2
-  exit 2
-fi
-
-SCENARIO=$1
-REPORT=$2
-TRACE=${3:-}
-LOG=${4:-}
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR")"
-
-# Absolutize without requiring the path to exist, so a missing input is reported
-# by name below rather than as a cd failure here.
-abspath() {
-  case "$1" in
-    /*) printf '%s\n' "$1" ;;
-    *)  printf '%s/%s\n' "$PWD" "$1" ;;
-  esac
-}
-
-SCENARIO_ABS="$(abspath "$SCENARIO")"
-REPORT_ABS="$(abspath "$REPORT")"
-
-# Default trace and log locations follow the report's basename, which is the
-# convention bin/iterate writes: reports/foo.json -> traces/foo.jsonl and
-# reports/foo.log. Both are derived, never substituted from something nearby.
-base="$(basename "$REPORT" .json)"
-[ -n "$TRACE" ] || TRACE="$REPO_DIR/traces/$base.jsonl"
-[ -n "$LOG" ]   || LOG="$REPO_DIR/reports/$base.log"
-
-TRACE_ABS="$(abspath "$TRACE")"
-LOG_ABS="$(abspath "$LOG")"
-
-missing=0
-for f in "$REPO_DIR/SPEC.md" "$REPO_DIR/HARNESS.md" "$SCENARIO_ABS" "$REPORT_ABS" "$TRACE_ABS" "$LOG_ABS"; do
-  if [ ! -f "$f" ]; then
-    echo "bin/diagnose: missing input: $f" >&2
-    missing=1
-  fi
-done
-if [ "$missing" -ne 0 ]; then
-  echo "bin/diagnose: a diagnosis without the trace or the log is speculation; refusing." >&2
-  exit 2
-fi
-
-if ! command -v claude >/dev/null 2>&1; then
-  echo "bin/diagnose: 'claude' not on PATH; the diagnostician cannot run." >&2
-  exit 2
-fi
-
-PROMPT=$(sed \
-  -e "s|__SPEC_PATH__|$REPO_DIR/SPEC.md|g" \
-  -e "s|__HARNESS_PATH__|$REPO_DIR/HARNESS.md|g" \
-  -e "s|__SCENARIO_PATH__|$SCENARIO_ABS|g" \
-  -e "s|__TRACE_PATH__|$TRACE_ABS|g" \
-  -e "s|__REPORT_PATH__|$REPORT_ABS|g" \
-  -e "s|__LOG_PATH__|$LOG_ABS|g" \
-  "$REPO_DIR/bin/diagnose-prompt.md")
-
-mkdir -p "$REPO_DIR/reports"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-SCENARIO_NAME=$(basename "$SCENARIO" .yaml)
-OUT_FILE="$REPO_DIR/reports/diagnosis-${SCENARIO_NAME}-${TIMESTAMP}.md"
-
-echo "diagnosing $SCENARIO_NAME ..." >&2
-
-claude -p "$PROMPT" \
-  --allowedTools "Read" \
-  --max-turns 15 \
-  > "$OUT_FILE"
-
-echo "diagnosis written to: $OUT_FILE" >&2
-echo
-cat "$OUT_FILE"
+missing = [str(v) for v in paths.values() if not v.is_file()]
+if missing:
+    sys.exit('bin/diagnose: missing input: ' + ', '.join(missing)
+             + '\nA diagnosis without the trace or the log is speculation; refusing.')
+report = json.loads(paths['__REPORT_PATH__'].read_text())
+feature = Path(report.get('feature_file', ''))
+if not feature.is_file():
+    sys.exit('bin/diagnose: report.json names no readable feature file')
+if report.get('category') == 'GREEN':
+    print('No diagnosis required: category is GREEN. Orchestrator should promote, not diagnose.')
+    sys.exit(0)
+if not shutil.which('claude'):
+    sys.exit("bin/diagnose: 'claude' not on PATH; the diagnostician cannot run.")
+prompt = (ROOT / 'bin/diagnose-prompt.md').read_text()
+for key, value in paths.items():
+    prompt = prompt.replace(key, str(value))
+prompt = prompt.replace('__FEATURE_PATH__', str(feature)).replace('__SCENARIO_NAME__', report.get('scenario_name', ''))
+out = case / f'diagnosis-{time.strftime("%Y%m%d-%H%M%S")}.md'
+print(f'diagnosing {report.get("scenario_name")} ...', file=sys.stderr)
+with out.open('w') as fh:
+    rc = subprocess.call(['claude', '-p', prompt, '--allowedTools', 'Read', '--max-turns', str(a.max_turns)], stdout=fh)
+print(f'diagnosis written to: {out}\n', file=sys.stderr)
+print(out.read_text())
+sys.exit(rc)

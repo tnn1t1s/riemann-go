@@ -15,7 +15,7 @@ Two sources of evidence, distinguished by the `source` field:
 import json
 from typing import Any, Dict, List, Optional
 
-from harness import sinks
+from riemann_harness.sinks import parse_json_body, parse_line_protocol
 
 # Tie-break order for events sharing a timestamp. Lower sorts first.
 _NAME_PRIORITY = {
@@ -70,7 +70,7 @@ def ntfy_provenance(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _ntfy_event(rec: Dict[str, Any]) -> Dict[str, Any]:
-    body = sinks.parse_json_body(rec.get("body", ""))
+    body = parse_json_body(rec.get("body", ""))
     ev: Dict[str, Any] = {
         "ts": float(rec["ts"]),
         "source": "sink-receiver",
@@ -95,7 +95,7 @@ def _influx_events(rec: Dict[str, Any]) -> List[Dict[str, Any]]:
     the observer substituted.
     """
     out: List[Dict[str, Any]] = []
-    for line in sinks.parse_line_protocol(rec.get("body", "")):
+    for line in parse_line_protocol(rec.get("body", "")):
         tags = line["tags"]
         fields = line["fields"]
         out.append(

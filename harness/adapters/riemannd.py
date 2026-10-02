@@ -11,10 +11,12 @@ them.
 """
 
 import os
+import signal
 import subprocess
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
-import requests
+from riemann_harness.http import request
 
 
 class Adapter:
@@ -22,7 +24,7 @@ class Adapter:
 
     def __init__(
         self,
-        binary: str,
+        command: List[str],
         listen_addr: str,
         ntfy_url: str,
         ntfy_topic: str,
@@ -31,7 +33,7 @@ class Adapter:
         state_dir: str,
         config: Optional[Dict[str, Any]] = None,
     ):
-        self.binary = binary
+        self.command = list(command)
         self.listen_addr = listen_addr
         self.ntfy_url = ntfy_url
         self.ntfy_topic = ntfy_topic
@@ -42,7 +44,7 @@ class Adapter:
         # documents, loaded at startup. The harness seeds the scenario's rules
         # over PUT /rules/{id} instead, so this file starts empty.
         self.rules_path = os.path.join(state_dir, "rules.json")
-        # A scenario's `config:` block, passed through as `--set key=value`,
+        # A scenario's configuration block, passed through as `--set key=value`,
         # per SPEC.md's CLI section. The names are SCALE.md's parameters. The
         # adapter does not know what any of them mean and must not learn: it
         # renders key and value as text and hands them over.
@@ -55,8 +57,7 @@ class Adapter:
     def start_command(self) -> List[str]:
         # Every URL, port and token appears here and only here, which is what
         # SPEC.md's implementation guidance requires of cmd/riemannd.
-        argv = [
-            self.binary,
+        argv = self.command + [
             "--listen", self.listen_addr,
             "--rules", self.rules_path,
             "--ntfy-url", self.ntfy_url,
@@ -70,20 +71,35 @@ class Adapter:
         return argv
 
     def start(self) -> subprocess.Popen:
+        with open(self.rules_path, "w") as fh:
+            fh.write("[]\n")
         self._log_file = open(self.log_path, "a+")
         self._proc = subprocess.Popen(
-            self.start_command(), stdout=self._log_file, stderr=subprocess.STDOUT
+            self.start_command(), cwd=self.state_dir,
+            stdout=self._log_file, stderr=subprocess.STDOUT,
+            start_new_session=True,
         )
         return self._proc
 
+    def exited(self) -> Optional[int]:
+        return None if self._proc is None else self._proc.poll()
+
     def stop(self) -> None:
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
+        if self._proc:
+            try:
+                os.killpg(self._proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
             try:
                 self._proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                self._proc.kill()
+                os.killpg(self._proc.pid, signal.SIGKILL)
                 self._proc.wait(timeout=5)
+            # Any child that outlived the parent, limited to this group.
+            try:
+                os.killpg(self._proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         self._proc = None
         if self._log_file:
             self._log_file.close()
@@ -95,30 +111,32 @@ class Adapter:
     def ready(self) -> bool:
         # SPEC.md's HTTP surface pins `GET /healthz` returning 200 as the
         # readiness claim. The adapter asks that and nothing else.
-        try:
-            r = requests.get(f"{self._base()}/healthz", timeout=2)
-        except requests.RequestException:
+        if self.exited() is not None:
             return False
-        return r.status_code == 200
+        try:
+            return request(f"{self._base()}/healthz", timeout=2)[0] == 200
+        except (OSError, ValueError):
+            return False
 
     # ---- surface ---------------------------------------------------------
+    # Each method returns (status, headers, decoded body) from an independent
+    # HTTP client; a body that is not JSON decodes to its text.
 
-    def post_events(self, events: List[Dict[str, Any]]) -> requests.Response:
+    def post_events(self, events: List[Dict[str, Any]]):
         """POST a batch. The body is the scenario's event list, unmodified."""
-        return requests.post(f"{self._base()}/events", json=events, timeout=10)
+        return request(f"{self._base()}/events", "POST", events, timeout=10)[:3]
 
-    def put_rule(self, rule_id: str, body: Dict[str, Any]) -> requests.Response:
-        return requests.put(f"{self._base()}/rules/{rule_id}", json=body, timeout=10)
+    def put_rule(self, rule_id: str, body: Dict[str, Any]):
+        return request(f"{self._base()}/rules/{quote(rule_id, safe='')}", "PUT", body, timeout=10)[:3]
 
-    def get_rule(self, rule_id: str) -> requests.Response:
-        return requests.get(f"{self._base()}/rules/{rule_id}", timeout=10)
+    def get_rule(self, rule_id: str):
+        return request(f"{self._base()}/rules/{quote(rule_id, safe='')}", timeout=10)[:3]
 
-    def dryrun_rule(self, rule_id: str, body: Dict[str, Any]) -> requests.Response:
-        return requests.post(f"{self._base()}/rules/{rule_id}/dryrun",
-                             json=body, timeout=10)
+    def dryrun_rule(self, rule_id: str, body: Dict[str, Any]):
+        return request(f"{self._base()}/rules/{quote(rule_id, safe='')}/dryrun", "POST", body, timeout=10)[:3]
 
-    def delete_rule(self, rule_id: str) -> requests.Response:
-        return requests.delete(f"{self._base()}/rules/{rule_id}", timeout=10)
+    def delete_rule(self, rule_id: str):
+        return request(f"{self._base()}/rules/{quote(rule_id, safe='')}", "DELETE", timeout=10)[:3]
 
-    def query_index(self, expr: str) -> requests.Response:
-        return requests.get(f"{self._base()}/index", params={"q": expr}, timeout=10)
+    def query_index(self, expr: str):
+        return request(f"{self._base()}/index?q={quote(expr, safe='')}", timeout=10)[:3]

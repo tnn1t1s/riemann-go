@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""CTest adapter for the independent Gherkin trial; never generates a candidate."""
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument('--build-dir', required=True)
+a = p.parse_args()
+build = Path(a.build_dir).resolve()
+root = Path(__file__).resolve().parents[1]
+raise SystemExit(subprocess.call([sys.executable, str(root / 'bin/trial'),
+    '--command', json.dumps([str(build / 'service')]),
+    '--spec', str(build / 'SPEC.md'),
+    '--build-manifest', str(build / 'build-manifest.json'),
+    '--out', str(build / 'reports')]))

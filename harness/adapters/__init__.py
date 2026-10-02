@@ -9,10 +9,3 @@ scenario will fail. That is the correct level of coupling.
 There is one adapter, `riemannd`. A generation whose surface it cannot drive is
 a spec violation, not an adapter gap.
 """
-
-from importlib import import_module
-
-
-def load(name: str):
-    mod = import_module(f"harness.adapters.{name}")
-    return mod.Adapter

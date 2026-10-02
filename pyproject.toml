@@ -1,0 +1,14 @@
+[project]
+name = "riemann-go"
+version = "0.0.0"
+description = "Specification, Gherkin corpus and trial tooling for riemann-go; the binary is a build output"
+requires-python = ">=3.11"
+dependencies = [
+  "riemann-harness",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+riemann-harness = { git = "https://github.com/tnn1t1s/riemann-harness" }
