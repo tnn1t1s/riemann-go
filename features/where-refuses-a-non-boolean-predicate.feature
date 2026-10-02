@@ -1,6 +1,6 @@
 Feature: where-refuses-a-non-boolean-predicate
 
-  BURNED from the held-out set on 2026-09-30, under scenarios/holdout/README.md
+  BURNED from the held-out set on 2026-09-30, under features/holdout/README.md
   rule 5. It failed in three of six generations, which is a spec ambiguity
   rather than a bad roll: SEMANTICS.md required the rejection, SPEC.md said
   only that a rule which does not compile is a 400, and the prompt's conflict
@@ -53,6 +53,8 @@ Feature: where-refuses-a-non-boolean-predicate
     Expected wall clock: about 1.4 s of stimulus plus a 5 s settle.
 
     Given a settle window of 5 seconds
+    # live-control fires on every probe event, so the two silences below are
+    # silences and not an empty pipeline.
     Given these rules are installed:
       """
       [
@@ -73,6 +75,8 @@ Feature: where-refuses-a-non-boolean-predicate
         }
       ]
       """
+    # A projection where a predicate belongs. Upstream matches every event with a
+    # metric; riemann-go refuses the rule.
     When at 0s the client puts rule "truthy-where":
       """
       {
@@ -91,6 +95,7 @@ Feature: where-refuses-a-non-boolean-predicate
         }
       }
       """
+    # A name the engine does not supply. SPEC.md: "The world is closed."
     When at 0.3s the client puts rule "open-world-where":
       """
       {
@@ -133,6 +138,7 @@ Feature: where-refuses-a-non-boolean-predicate
         }
       ]
       """
+    # The pipeline is alive.
     Then the recorded trace contains:
       """
       [

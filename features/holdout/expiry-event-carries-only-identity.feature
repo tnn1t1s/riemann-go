@@ -24,6 +24,11 @@ Feature: expiry-event-carries-only-identity
     Expected wall clock: no stimulus after t=0, a 2 s ttl, and a 9 s settle.
 
     Given a settle window of 9 seconds
+    # archive-probe puts the entry in the index so that it has something to expire
+    # from. expiry-any must fire: the expiry event carries host and service, so it
+    # matches. expiry-tagged must never fire: the expiring entry carried the tag,
+    # the synthesized event does not, and this rule firing means the implementation
+    # copied fields the specification says it drops.
     Given these rules are installed:
       """
       [
@@ -56,6 +61,8 @@ Feature: expiry-event-carries-only-identity
         }
       ]
       """
+    # One beat with a 2 s ttl, carrying a metric, a tag and an attribute, then
+    # silence. The entry expires during the settle window.
     When at 0s the emitter posts:
       """
       [
@@ -74,6 +81,8 @@ Feature: expiry-event-carries-only-identity
         }
       ]
       """
+    # Identity survives, metric does not. `metric: null` is the spec's own
+    # statement in the alert shape: null when the event carries none.
     Then the recorded trace contains:
       """
       [
@@ -87,6 +96,10 @@ Feature: expiry-event-carries-only-identity
         }
       ]
       """
+    # The tag did not survive, so expiry-tagged has nothing to match. The metric
+    # did not survive either, which the metric 1234 entry catches: a copy-the-entry
+    # expiry fails here even if the tag happened to be dropped. And the live event
+    # itself never reaches ntfy, because no rule routes it there.
     Then the recorded trace excludes:
       """
       [
@@ -119,6 +132,9 @@ Feature: expiry-event-carries-only-identity
         }
       ]
       """
+    # Exactly one expiry, delivered exactly once. An implementation that
+    # re-dispatches the synthesized event through the index leaf and expires it
+    # again would show more.
     Then the recorded trace has these counts:
       """
       [

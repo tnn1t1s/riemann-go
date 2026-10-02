@@ -23,6 +23,8 @@ Feature: set-reads-pre-rewrite-values
     Expected wall clock: one event at t=0 plus a 5 s settle.
 
     Given a settle window of 5 seconds
+    # Child 0 is rewritten. Child 1 is the same incoming event, untouched by child
+    # 0's rewrite.
     Given these rules are installed:
       """
       [
@@ -67,6 +69,9 @@ Feature: set-reads-pre-rewrite-values
         }
       ]
       """
+    # The first entry is the correct result: both expressions read the pre-rewrite
+    # event. The second is the sibling, unaffected by the rewrite below its
+    # neighbour.
     Then the recorded trace contains:
       """
       [
@@ -86,6 +91,10 @@ Feature: set-reads-pre-rewrite-values
         }
       ]
       """
+    # Sequential rewrite, `service` first: service becomes alpha, then state reads
+    # the already-rewritten service and also becomes alpha. Sequential rewrite,
+    # `state` first: state becomes swap.probe, then service reads the
+    # already-rewritten state.
     Then the recorded trace excludes:
       """
       [
@@ -117,6 +126,9 @@ Feature: set-reads-pre-rewrite-values
         }
       ]
       """
+    # One event, two leaves, two posts. An implementation that mutates the event in
+    # place still produces two posts, but both carry the swapped values and the
+    # second entry of the contains above fails.
     Then the recorded trace has these counts:
       """
       [
@@ -143,6 +155,7 @@ Feature: set-reads-pre-rewrite-values
         }
       ]
       """
+    # The two posts traversed different leaves, so each carries its own path.
     Then the recorded trace has these fields:
       """
       [

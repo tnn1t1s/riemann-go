@@ -91,6 +91,7 @@ Feature: provenance-on-alert
         }
       ]
       """
+    # Under the warning threshold: restated ok, no transition, no alert.
     When at 0s the emitter posts:
       """
       [
@@ -105,6 +106,7 @@ Feature: provenance-on-alert
         }
       ]
       """
+    # Over 5.0: restated warning. ok -> warning is the transition that alerts.
     When at 1s the emitter posts:
       """
       [

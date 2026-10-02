@@ -82,6 +82,7 @@ Feature: ddt-skips-the-metricless-event
         }
       ]
       """
+    # First event for the key. Nothing to differentiate against, so no output.
     When at 0s the emitter posts:
       """
       [
@@ -94,6 +95,9 @@ Feature: ddt-skips-the-metricless-event
         }
       ]
       """
+    # No `metric` key at all. Ignored entirely, and must not become the previous
+    # event. An implementation reading an absent metric as zero emits a large
+    # negative rate here and a large positive one at the next event.
     When at 1s the emitter posts:
       """
       [
@@ -105,6 +109,8 @@ Feature: ddt-skips-the-metricless-event
         }
       ]
       """
+    # Differentiates against the t=0 reading of 10, across the gap. Same value, so
+    # the rate is exactly zero however long the gap was.
     When at 2s the emitter posts:
       """
       [
@@ -128,6 +134,8 @@ Feature: ddt-skips-the-metricless-event
         }
       ]
       """
+    # Catches both the absent-metric-reads-as-zero implementation and an
+    # implementation that emits a rate for the first event of a key.
     Then the recorded trace excludes:
       """
       [
@@ -153,6 +161,7 @@ Feature: ddt-skips-the-metricless-event
         }
       ]
       """
+    # Three events in, exactly one rate out.
     Then the recorded trace has these counts:
       """
       [

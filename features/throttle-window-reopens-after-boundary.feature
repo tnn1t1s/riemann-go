@@ -1,12 +1,12 @@
 Feature: throttle-window-reopens-after-boundary
 
-  BURNED from the held-out set on 2026-09-17, under scenarios/holdout/README.md
+  BURNED from the held-out set on 2026-09-17, under features/holdout/README.md
   rule 5. Its failure against the first generation showed that SPEC.md property
   9 described no reproducible window at all, and the wording was rewritten to
   the first-event-anchored tumbling window. The spec is now fitted to this case,
   so it measures nothing about generalisation and belongs here.
 
-  scenarios/holdout/throttle-window-anchors-on-the-first-event.yaml holds out the
+  features/holdout/throttle-window-anchors-on-the-first-event.feature holds out the
   same property, derived independently from upstream's part-time-simple-test.
 
   @P9
@@ -55,6 +55,7 @@ Feature: throttle-window-reopens-after-boundary
         }
       ]
       """
+    # First burst, four events inside one 2 s window opened by metric 1.
     When at 0s the emitter posts:
       """
       [
@@ -79,6 +80,8 @@ Feature: throttle-window-reopens-after-boundary
         }
       ]
       """
+    # Metrics 3 and 4 are beyond the limit. Discarded, not deferred: these must
+    # never appear, not even in the second window.
     When at 0.4s the emitter posts:
       """
       [
@@ -103,6 +106,9 @@ Feature: throttle-window-reopens-after-boundary
         }
       ]
       """
+    # Second burst, after the first window has closed at about t=2.0. The 0.8 s of
+    # slack is for wall-clock jitter; the scenario does not test the boundary
+    # instant, which a real clock cannot resolve.
     When at 2.8s the emitter posts:
       """
       [
@@ -139,6 +145,8 @@ Feature: throttle-window-reopens-after-boundary
         }
       ]
       """
+    # Metrics 5 and 6 are the whole point. A window that never closes never emits
+    # these.
     Then the recorded trace contains:
       """
       [
@@ -164,6 +172,10 @@ Feature: throttle-window-reopens-after-boundary
         }
       ]
       """
+    # Metrics 3 and 4 are over the limit in window one. An off-by-one that admits a
+    # third event per window fails here. Metric 7 is over the limit in window two,
+    # and also the deferral check: an implementation that queues the excess of
+    # burst one would release something here.
     Then the recorded trace excludes:
       """
       [
@@ -196,6 +208,7 @@ Feature: throttle-window-reopens-after-boundary
         }
       ]
       """
+    # Seven events in, exactly four out, two per window.
     Then the recorded trace has these counts:
       """
       [

@@ -34,6 +34,7 @@ Feature: dryrun-tests-a-rule-that-is-not-installed
         }
       ]
       """
+    # Give the ring something for a dry run to replay.
     When at 0s the emitter posts:
       """
       [
@@ -46,6 +47,8 @@ Feature: dryrun-tests-a-rule-that-is-not-installed
         }
       ]
       """
+    # A rule this server has never seen. The id is deliberately absent from the
+    # rule set: an implementation that looks the id up first answers 404 here.
     When at 1s the client dry-runs rule "never-installed":
       """
       {
@@ -64,6 +67,7 @@ Feature: dryrun-tests-a-rule-that-is-not-installed
         }
       }
       """
+    # The dry run answered, rather than refusing an id it does not hold.
     Then the recorded trace contains:
       """
       [
@@ -75,6 +79,9 @@ Feature: dryrun-tests-a-rule-that-is-not-installed
         }
       ]
       """
+    # And it touched nothing live: a dry run that actually alerts is worse than one
+    # that refuses. The put entry is here because the rule must not have been
+    # installed as a side effect of testing it.
     Then the recorded trace excludes:
       """
       [

@@ -21,6 +21,26 @@ Feature: backpressure-sheds-and-counts
       }
       """
     Given a settle window of 10 seconds
+    # Self-observation is an ordinary event stream, so the drop counter is an
+    # ordinary rule. The threshold lives in the rule, which is why the matcher
+    # needs no comparison operator to assert "drops happened".
+    #
+    # shed-detector's throttle is not a changed-state. Self-observation events
+    # carry state "ok" on every sample, so a changed-state here never sees a
+    # transition and correctly suppresses all of them; three generations
+    # implemented that faithfully and this scenario called each of them wrong. A
+    # throttle gives the "tell me once" the rule wanted, keyed on arrival rather
+    # than on state.
+    #
+    # Its sink is influx, not ntfy. This rule reports that the ntfy queue is
+    # shedding, and its own alert would join that same queue and be shed with
+    # everything else. An alert about a saturated sink cannot travel through it.
+    #
+    # accounting-violation asserts the accounting identity by its absence.
+    # `riemann.accounting.residual` is the self-observation field this property
+    # needs and SPEC.md must pin: it is accepted - (processed + dropped + queued +
+    # in_flight), and SPEC.md invariant 6 says it is exactly zero. If SPEC.md names
+    # it differently, this rule's match string changes and nothing else does.
     Given these rules are installed:
       """
       [
@@ -60,6 +80,7 @@ Feature: backpressure-sheds-and-counts
         }
       ]
       """
+    # 100 ms per ntfy post. The queue holds 32; the flood is 2000.
     When at 0s the ntfy sink delays each reply by 0.1 seconds
     When at 0.5s the emitter posts 2000 events in batches of 100 every 0.05s from the template:
       """
@@ -71,6 +92,7 @@ Feature: backpressure-sheds-and-counts
         "ttl": 300
       }
       """
+    # Drops were counted and surfaced as events, not lost silently.
     Then the recorded trace contains:
       """
       [
@@ -80,6 +102,9 @@ Feature: backpressure-sheds-and-counts
         }
       ]
       """
+    # A slow sink does not saturate the loop, so no emitter sees a 429. And the
+    # accounting identity held: the accounting-violation alert firing means it did
+    # not.
     Then the recorded trace excludes:
       """
       [
@@ -108,6 +133,10 @@ Feature: backpressure-sheds-and-counts
         }
       ]
       """
+    # Every batch was admitted: twenty batches of a hundred. Then the sink shed.
+    # Two thousand events in, far fewer posts out: the run is about eleven seconds
+    # and the oracle takes 100 ms per post, so the receiver cannot have seen more
+    # than about 110 of them.
     Then the recorded trace has these counts:
       """
       [

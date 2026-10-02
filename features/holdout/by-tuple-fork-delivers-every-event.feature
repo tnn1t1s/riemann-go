@@ -41,6 +41,9 @@ Feature: by-tuple-fork-delivers-every-event
 
     Expected wall clock: about 2.8 s of stimulus plus a 5 s settle.
 
+    # One shard. Two hosts on two shards would give a rule-wide `changed-state`
+    # two instances by accident and could produce the right count for the wrong
+    # reason.
     Given riemannd is configured with:
       """
       {
@@ -48,6 +51,8 @@ Feature: by-tuple-fork-delivers-every-event
       }
       """
     Given a settle window of 5 seconds
+    # Child 0 is every event, unchanged. Child 1 is the first event of each fork
+    # and no other.
     Given these rules are installed:
       """
       [
@@ -88,6 +93,7 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # (h1, by.a) - new fork.
     When at 0s the emitter posts:
       """
       [
@@ -100,6 +106,7 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # (h1, by.b) - new fork, same host as the one above.
     When at 0.4s the emitter posts:
       """
       [
@@ -112,6 +119,7 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # (h1, by.a) again.
     When at 0.8s the emitter posts:
       """
       [
@@ -124,6 +132,7 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # (h2, by.a) - new fork, same service as the first.
     When at 1.2s the emitter posts:
       """
       [
@@ -184,6 +193,9 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # The by.a metric 1 and by.b metric 2 entries say every fork-creating event
+    # survived its own fork's creation, and the by.a metric 3 and metric 5 entries
+    # say so did the rest. The by.first entries are one first event per tuple.
     Then the recorded trace contains:
       """
       [
@@ -255,6 +267,9 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # (h1, by.b) at metric 2 is a different fork from (h1, by.a) at metric 1, so a
+    # `by` on host alone would suppress it in the contains above and fire the
+    # by.first metric 3 and metric 5 entries excluded here instead.
     Then the recorded trace excludes:
       """
       [
@@ -292,6 +307,9 @@ Feature: by-tuple-fork-delivers-every-event
         }
       ]
       """
+    # Eight in, eight through the transparent leaf. Three tuples, three first
+    # events: two means host-only forking, one means no forking, eight means the
+    # subtree is rebuilt per event and remembers nothing.
     Then the recorded trace has these counts:
       """
       [

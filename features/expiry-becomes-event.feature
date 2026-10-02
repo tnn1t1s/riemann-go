@@ -12,6 +12,10 @@ Feature: expiry-becomes-event
     scenario here.
 
     Given a settle window of 8 seconds
+    # The index leaf is what makes this identity expire at all. SPEC.md property 5
+    # indexes only what a rule routes there, so without it the heartbeat would
+    # never enter the index and the TTL would never elapse. It sits before
+    # changed-state so the raw event is what gets stored.
     Given these rules are installed:
       """
       [
@@ -41,6 +45,7 @@ Feature: expiry-becomes-event
         }
       ]
       """
+    # One beat with a 2 s ttl, then silence. The entry expires during settle.
     When at 0s the emitter posts:
       """
       [
@@ -64,6 +69,8 @@ Feature: expiry-becomes-event
         }
       ]
       """
+    # The initial `ok` is not a transition away from changed-state's initial value,
+    # so it must not alert. Only the expiry does.
     Then the recorded trace excludes:
       """
       [

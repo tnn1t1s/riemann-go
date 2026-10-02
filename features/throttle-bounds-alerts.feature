@@ -56,6 +56,9 @@ Feature: throttle-bounds-alerts
         }
       ]
       """
+    # Twenty events at 250 ms. Every one carries a distinct state, so every one is
+    # a transition: changed-state forwards all twenty and the throttle is what
+    # bounds them. Five seconds of stimulus spans three 2 s windows.
     When at 0s the emitter posts 20 events in batches of 1 every 0.25s from the template:
       """
       {
@@ -84,6 +87,9 @@ Feature: throttle-bounds-alerts
         }
       ]
       """
+    # The rule is registered before it can fire. The first 202 is not used as the
+    # `before`, because the reply and the first alert can land in either order
+    # within a millisecond of each other.
     Then the recorded trace has this order:
       """
       [
@@ -100,6 +106,7 @@ Feature: throttle-bounds-alerts
         }
       ]
       """
+    # Not more. Twenty transitions in, at most six out across three windows.
     Then the recorded trace has these counts:
       """
       [

@@ -76,6 +76,7 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # First burst. Metric 1 opens a window that closes at about t=2.0.
     When at 0s the emitter posts:
       """
       [
@@ -100,6 +101,7 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # Third in that window. Discarded under every reading.
     When at 0.4s the emitter posts:
       """
       [
@@ -112,6 +114,11 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # The gap. Nothing arrives for 2.5 s, which is longer than a window, so the
+    # first window closes with no event at its boundary and produces nothing.
+    #
+    # Second burst. Metric 4 opens a window that closes at about t=4.9, and the
+    # 0.9 s of slack below the first window's close is for wall-clock jitter.
     When at 2.9s the emitter posts:
       """
       [
@@ -136,6 +143,10 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # The event that separates the two rules. Third in the window metric 4 opened,
+    # so riemann-go discards it. A fixed grid anchored anywhere from about -0.9 s
+    # to +0.1 s puts a boundary between metric 5 and this event and admits it as
+    # the first of a new bin.
     When at 4.1s the emitter posts:
       """
       [
@@ -148,6 +159,8 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # The window reopened at the first event after the gap rather than on a grid,
+    # so metrics 4 and 5 are both inside one allowance.
     Then the recorded trace contains:
       """
       [
@@ -173,6 +186,8 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # Metric 3 is over the limit in the first window. Metric 6 is the departure, in
+    # one assertion.
     Then the recorded trace excludes:
       """
       [
@@ -205,6 +220,8 @@ Feature: throttle-window-anchors-on-the-first-event
         }
       ]
       """
+    # Six events in, four out, two per window, and no window boundary emits
+    # anything of its own.
     Then the recorded trace has these counts:
       """
       [

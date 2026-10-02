@@ -44,6 +44,9 @@ Feature: set-derives-fields-from-the-incoming-event
     Expected wall clock: about 0.5 s of stimulus plus a 5 s settle.
 
     Given a settle window of 5 seconds
+    # Child 0 is a constant, an increment, and a field derived from itself. Child 1
+    # is a metric computed from the tag list, and nothing else touched, so this
+    # child also shows that child 0's rewrite did not reach it.
     Given these rules are installed:
       """
       [
@@ -103,6 +106,8 @@ Feature: set-derives-fields-from-the-incoming-event
         }
       ]
       """
+    # The empty-event row: no state and no tags, so both expressions read the event
+    # model's defaults.
     When at 0.5s the emitter posts:
       """
       [
@@ -114,6 +119,12 @@ Feature: set-derives-fields-from-the-incoming-event
         }
       ]
       """
+    # The set.derived metric 11 entry is constant, increment and self-derived
+    # field, all on one event. The set.tagcount metric 2 entry is two tags, and its
+    # state is the incoming one, which is also the check that child 0's rewrite did
+    # not modify the event child 1 received. The metric 6 entry says absent state
+    # reads as "", and the metric 0 entry says absent tags read as an empty
+    # array.
     Then the recorded trace contains:
       """
       [
@@ -144,6 +155,10 @@ Feature: set-derives-fields-from-the-incoming-event
         }
       ]
       """
+    # Every path rewrites the service, so the original set.probe at a sink means a
+    # `set` was skipped. The set.derived metric 10 and metric 5 entries are the
+    # incoming metrics, unincremented and uncounted. The set.tagcount ok-adj entry
+    # catches in-place rewriting: child 1 would see child 0's state.
     Then the recorded trace excludes:
       """
       [
@@ -189,6 +204,7 @@ Feature: set-derives-fields-from-the-incoming-event
         }
       ]
       """
+    # Two events, two leaves, four posts.
     Then the recorded trace has these counts:
       """
       [

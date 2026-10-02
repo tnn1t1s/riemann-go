@@ -26,6 +26,8 @@ Feature: coalesce-emits-expired-identity-once
 
     Expected wall clock: about 5 s of stimulus plus a 5 s settle.
 
+    # The fold is over the whole stream, so it must run in one place. A `global`
+    # rule instantiated per shard would fold each shard's slice separately.
     Given riemannd is configured with:
       """
       {
@@ -58,6 +60,8 @@ Feature: coalesce-emits-expired-identity-once
         }
       ]
       """
+    # alpha has a 2 s ttl and ages out of the fold on its own, without the index
+    # reaper's involvement.
     When at 0s the emitter posts:
       """
       [
@@ -82,6 +86,7 @@ Feature: coalesce-emits-expired-identity-once
         }
       ]
       """
+    # Completes the trio: the first oversize emission.
     When at 0.6s the emitter posts:
       """
       [
@@ -94,6 +99,9 @@ Feature: coalesce-emits-expired-identity-once
         }
       ]
       """
+    # alpha lapsed at about t=2. This arrival re-evaluates the table, delivers
+    # alpha in the set one last time, and retains only the live two: the second and
+    # last oversize emission.
     When at 4s the emitter posts:
       """
       [
@@ -106,6 +114,7 @@ Feature: coalesce-emits-expired-identity-once
         }
       ]
       """
+    # From here the fold is two members. Neither of these may alert.
     When at 4.5s the emitter posts:
       """
       [
@@ -164,6 +173,8 @@ Feature: coalesce-emits-expired-identity-once
         }
       ]
       """
+    # The convergence property in one number. Four means the dead identity is
+    # counted forever; one means it was dropped without its final delivery.
     Then the recorded trace has these counts:
       """
       [

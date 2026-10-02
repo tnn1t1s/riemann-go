@@ -28,6 +28,7 @@ Feature: rule-lifecycle
         }
       }
       """
+    # Fires while the rule is registered.
     When at 1s the emitter posts:
       """
       [
@@ -41,6 +42,8 @@ Feature: rule-lifecycle
       ]
       """
     When at 3s the client deletes rule "listener-connected"
+    # A transition that would alert if the rule were still registered. The distinct
+    # state is what makes the silence provable rather than assumed.
     When at 4s the emitter posts:
       """
       [
@@ -75,6 +78,7 @@ Feature: rule-lifecycle
         }
       ]
       """
+    # The post-delete transition. Its absence is the delete half.
     Then the recorded trace excludes:
       """
       [

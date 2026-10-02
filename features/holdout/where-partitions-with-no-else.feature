@@ -35,6 +35,10 @@ Feature: where-partitions-with-no-else
     Expected wall clock: about 1.2 s of stimulus plus a 5 s settle.
 
     Given a settle window of 5 seconds
+    # The match is a tag rather than a service, because the services under test are
+    # the subject of the expression and must not also be the selector. Sibling 0 is
+    # the predicate; sibling 1 is the negation, which is what riemann-go has
+    # instead of an else clause.
     Given these rules are installed:
       """
       [
@@ -109,6 +113,7 @@ Feature: where-partitions-with-no-else
         }
       ]
       """
+    # Matches: contains an "a" at the start. Carries one of the two tags.
     When at 0s the emitter posts:
       """
       [
@@ -125,6 +130,7 @@ Feature: where-partitions-with-no-else
         }
       ]
       """
+    # Does not match. Carries both tags.
     When at 0.4s the emitter posts:
       """
       [
@@ -142,6 +148,8 @@ Feature: where-partitions-with-no-else
         }
       ]
       """
+    # Matches, but not at the start of the string. An anchored pattern gets this
+    # one wrong and nothing else in the scenario notices.
     When at 0.8s the emitter posts:
       """
       [
@@ -158,6 +166,7 @@ Feature: where-partitions-with-no-else
         }
       ]
       """
+    # Does not match. Carries both tags and a third.
     When at 1.2s the emitter posts:
       """
       [
@@ -211,6 +220,10 @@ Feature: where-partitions-with-no-else
         }
       ]
       """
+    # No event may appear on both sides of the partition, which the w.hit entries
+    # check. One tag is not both tags, which the w.bothtags entries check. And
+    # every path rewrites the service, so an original service at the oracle means
+    # an event reached a sink without traversing a `set`.
     Then the recorded trace excludes:
       """
       [
@@ -271,6 +284,8 @@ Feature: where-partitions-with-no-else
         }
       ]
       """
+    # Four events in, four alerts out of the partition rule: exactly one per event.
+    # Eight means an implicit else, two means one sibling never ran.
     Then the recorded trace has these counts:
       """
       [

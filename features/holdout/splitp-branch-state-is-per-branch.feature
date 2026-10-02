@@ -49,6 +49,9 @@ Feature: splitp-branch-state-is-per-branch
 
     Expected wall clock: about 1.5 s of stimulus plus a 5 s settle.
 
+    # One shard, because a rule instance per shard would hand the branches separate
+    # state for a reason this scenario is not testing. Every event here carries one
+    # identity, so a single shard is also the natural case.
     Given riemannd is configured with:
       """
       {
@@ -110,6 +113,7 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # High branch, first event it has seen: ok to warning.
     When at 0s the emitter posts:
       """
       [
@@ -122,6 +126,8 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # Low branch, first event it has seen. Its remembered state is still
+    # `initial`, so this fires even though the previous event was also warning.
     When at 0.5s the emitter posts:
       """
       [
@@ -134,6 +140,7 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # High branch again, warning again. Suppressed.
     When at 1s the emitter posts:
       """
       [
@@ -146,6 +153,7 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # Low branch, warning to critical.
     When at 1.5s the emitter posts:
       """
       [
@@ -158,6 +166,7 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # The bs.low metric 1 entry is the assertion a shared `changed-state` fails.
     Then the recorded trace contains:
       """
       [
@@ -181,6 +190,8 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # The metric 16 entry is the assertion a per-event subtree fails, and the
+    # bs.high entries say neither branch may receive the other's events.
     Then the recorded trace excludes:
       """
       [
@@ -220,6 +231,8 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # Four events in, three alerts out. Two means shared state, four means nothing
+    # is remembered.
     Then the recorded trace has these counts:
       """
       [
@@ -246,6 +259,9 @@ Feature: splitp-branch-state-is-per-branch
         }
       ]
       """
+    # Metric 2 replaced `warning`, which the low branch remembered from metric 1.
+    # An implementation whose branch state resets between events has no prior state
+    # to report here.
     Then the recorded trace has these fields:
       """
       [

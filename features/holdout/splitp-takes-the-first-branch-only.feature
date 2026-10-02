@@ -100,6 +100,7 @@ Feature: splitp-takes-the-first-branch-only
         }
       ]
       """
+    # Over the first threshold, and also over the second. Array order decides.
     When at 0s the emitter posts:
       """
       [
@@ -112,6 +113,7 @@ Feature: splitp-takes-the-first-branch-only
         }
       ]
       """
+    # Over the second threshold only.
     When at 0.5s the emitter posts:
       """
       [
@@ -124,6 +126,7 @@ Feature: splitp-takes-the-first-branch-only
         }
       ]
       """
+    # Over neither.
     When at 1s the emitter posts:
       """
       [
@@ -136,6 +139,8 @@ Feature: splitp-takes-the-first-branch-only
         }
       ]
       """
+    # The node paths follow SPEC.md's algebra: the first branch is `branches/0` and
+    # the sink is entry 0 of the `set` node's children.
     Then the recorded trace contains:
       """
       [
@@ -166,6 +171,9 @@ Feature: splitp-takes-the-first-branch-only
         }
       ]
       """
+    # The looser branch must not also receive the event that took the stricter one,
+    # which is the metric 15 warning entry. And no path leaves the state as it
+    # arrived, which is the `raw` entry.
     Then the recorded trace excludes:
       """
       [
@@ -220,6 +228,7 @@ Feature: splitp-takes-the-first-branch-only
         }
       ]
       """
+    # Three events, three posts: exactly one branch each.
     Then the recorded trace has these counts:
       """
       [

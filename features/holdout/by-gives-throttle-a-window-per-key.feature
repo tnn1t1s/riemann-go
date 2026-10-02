@@ -20,6 +20,9 @@ Feature: by-gives-throttle-a-window-per-key
 
     Expected wall clock: about 2 s of stimulus plus a 5 s settle.
 
+    # One shard. With several shards a per-rule shared counter would be
+    # instantiated once per shard, and two hosts landing on two shards would give
+    # the right answer for the wrong reason.
     Given riemannd is configured with:
       """
       {
@@ -56,6 +59,8 @@ Feature: by-gives-throttle-a-window-per-key
         }
       ]
       """
+    # Interleaved, so a shared counter is exhausted by alpha before beta's first
+    # event ever arrives.
     When at 0s the emitter posts:
       """
       [
@@ -128,6 +133,7 @@ Feature: by-gives-throttle-a-window-per-key
         }
       ]
       """
+    # The beta metric 2 entry is the assertion a single shared counter fails.
     Then the recorded trace contains:
       """
       [
@@ -181,6 +187,8 @@ Feature: by-gives-throttle-a-window-per-key
         }
       ]
       """
+    # One per key, and the per-key counts are asserted separately so that a
+    # two-alert total arrived at by letting alpha through twice still fails.
     Then the recorded trace has these counts:
       """
       [

@@ -48,6 +48,10 @@ Feature: expired-name-means-the-reaper-only
     Expected wall clock: 1 s of stimulus, a 2 s ttl, and an 8 s settle.
 
     Given a settle window of 8 seconds
+    # archive-probe puts one identity in the index so that there is something to
+    # expire. expired-by-name reads the engine's own signal, true only for what the
+    # index reaper produced. expired-by-state is the broader test an author writes
+    # when they want both sources.
     Given these rules are installed:
       """
       [
@@ -108,6 +112,8 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # Indexed with a 2 s ttl. Its reaper event arrives during the settle window
+    # carrying host and service and no metric.
     When at 0s the emitter posts:
       """
       [
@@ -120,6 +126,7 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # A client saying "expired" in the state field. Not the index's own signal.
     When at 0.5s the emitter posts:
       """
       [
@@ -132,6 +139,9 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # Stale on arrival: time plus ttl is decades in the past. Upstream's `expired?`
+    # is true for this event; riemann-go's `expired` is not, and its state is not
+    # "expired" either, so it satisfies neither predicate.
     When at 1s the emitter posts:
       """
       [
@@ -145,6 +155,10 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # The exp.byname entry is the reaper event, seen by both predicates; its metric
+    # is null because the synthesized event copies only host and service. The
+    # exp.bystate metric 2 entry is the client-sent event, seen by the state
+    # comparison alone.
     Then the recorded trace contains:
       """
       [
@@ -169,6 +183,10 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # `expired` is not a synonym for the state string, so exp.byname at metric 2
+    # must not appear. Neither predicate holds for a stale timestamp, which is
+    # metric 3. And the expiring entry's metric did not survive into the reaper
+    # event, which is metric 1.
     Then the recorded trace excludes:
       """
       [
@@ -191,6 +209,7 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # The client event was ingested long before the entry's ttl lapsed.
     Then the recorded trace has this order:
       """
       [
@@ -207,6 +226,8 @@ Feature: expired-name-means-the-reaper-only
         }
       ]
       """
+    # One reaper event in the run, and only the reaper event satisfies exp.byname.
+    # exp.bystate counts two: the reaper event and the client-sent one.
     Then the recorded trace has these counts:
       """
       [

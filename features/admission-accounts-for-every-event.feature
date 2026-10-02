@@ -39,6 +39,8 @@ Feature: admission-accounts-for-every-event
         }
       ]
       """
+    # One batch of 500 into an inbox of 8, with a 1 ms deadline. Some prefix is
+    # admitted; the remainder is rejected and counted.
     When at 0s the emitter posts:
       """
       [
@@ -61,6 +63,7 @@ Feature: admission-accounts-for-every-event
         "ttl": 300
       }
       """
+    # The single event posted before the flood was admitted normally.
     Then the recorded trace contains:
       """
       [
@@ -71,6 +74,7 @@ Feature: admission-accounts-for-every-event
         }
       ]
       """
+    # Pressure is not a malformed request, and never a server fault.
     Then the recorded trace excludes:
       """
       [
@@ -84,6 +88,7 @@ Feature: admission-accounts-for-every-event
         }
       ]
       """
+    # Admitted events are not rolled back: what got in still reaches influx.
     Then the recorded trace has these counts:
       """
       [
@@ -96,6 +101,10 @@ Feature: admission-accounts-for-every-event
         }
       ]
       """
+    # Every reply says how many it took, which is what lets a fire-and-forget
+    # emitter count its own loss. A 429 additionally carries `rejected`, but a 429
+    # is not reachable on demand here, so this asserts the part that holds on every
+    # reply.
     Then the recorded trace has these fields:
       """
       [

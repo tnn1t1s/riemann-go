@@ -29,6 +29,8 @@ Feature: changed-state-transitions-only
         }
       ]
       """
+    # Five in state ok. changed-state's initial value is ok, so none is a
+    # transition and none may alert.
     When at 0s the emitter posts:
       """
       [
@@ -89,6 +91,7 @@ Feature: changed-state-transitions-only
         }
       ]
       """
+    # The transition.
     When at 2s the emitter posts:
       """
       [
@@ -137,6 +140,7 @@ Feature: changed-state-transitions-only
         }
       ]
       """
+    # The whole property in one assertion: six events in, one alert out.
     Then the recorded trace has these counts:
       """
       [

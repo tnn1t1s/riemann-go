@@ -52,6 +52,7 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # Buffered: the first event for a key is never passed immediately.
     When at 0s the emitter posts:
       """
       [
@@ -76,6 +77,9 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # 3.4 s after the head of the buffer, so the buffer releases, including this
+    # event. The 0.4 s over the window is slack for wall-clock jitter; the scenario
+    # does not test the inclusive boundary, which a real clock cannot resolve.
     When at 3.4s the emitter posts:
       """
       [
@@ -88,6 +92,7 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # The spike. Value changed, so a new buffer starts.
     When at 4.2s the emitter posts:
       """
       [
@@ -112,6 +117,8 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # Value changed back before the spike could stabilise. Metrics 4 and 5 are
+    # discarded here and can never be emitted afterwards.
     When at 6s the emitter posts:
       """
       [
@@ -124,6 +131,7 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # 3.4 s after metric 6, so the second buffer releases.
     When at 9.4s the emitter posts:
       """
       [
@@ -136,6 +144,7 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # The releasing event is part of the release.
     Then the recorded trace contains:
       """
       [
@@ -161,6 +170,8 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # The spike. An implementation that buffers but never discards emits these on
+    # the next release; one that does not buffer at all emits them immediately.
     Then the recorded trace excludes:
       """
       [
@@ -170,6 +181,7 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # The two releases happened in order, six seconds apart.
     Then the recorded trace has this order:
       """
       [
@@ -185,6 +197,9 @@ Feature: stable-releases-buffer-and-elides-spike
         }
       ]
       """
+    # Seven events in, five out. An implementation that passes events through
+    # unbuffered gives seven; one that drops rather than buffers gives two or
+    # three; one that never releases gives none.
     Then the recorded trace has these counts:
       """
       [

@@ -67,6 +67,10 @@ Feature: ingest-accepted
         }
       ]
       """
+    # A rule must be registered before it can route an event to a sink. The 202 is
+    # deliberately not the `before` here: SPEC.md says the server makes no promise
+    # that an accepted event reached any sink, so ordering the reply against the
+    # write would assert a race rather than a property.
     Then the recorded trace has this order:
       """
       [

@@ -48,6 +48,7 @@ Feature: read-surface-allows-a-browser
       ]
       """
     When at 1s the client queries the index with "service == "cors.probe""
+    # The query worked at all.
     Then the recorded trace contains:
       """
       [
@@ -59,6 +60,8 @@ Feature: read-surface-allows-a-browser
         }
       ]
       """
+    # And a browser would have been allowed to read it. Catches the implementation
+    # that serves the right body to curl and nothing to the dashboard.
     Then the recorded trace has these fields:
       """
       [
