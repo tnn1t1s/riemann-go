@@ -6,6 +6,12 @@ assets. One build manifest binds all of them to the SPEC.md bytes they were
 generated from. The trial checks that the artifact it is about to launch is
 one of those, and that the expected SPEC.md is the one the manifest names.
 The candidate's own claims about itself are never consulted.
+
+A pass therefore means the launched file came from this build, not that it is
+the host-native artifact the trial meant to launch: a cross-compiled asset
+passed as command[0] binds and then fails to execute. `build_binding` in the
+report carries the weaker claim. Narrowing it would need the manifest to say
+which artifact is host-native.
 """
 import hashlib
 import json
