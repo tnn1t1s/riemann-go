@@ -24,8 +24,16 @@ from harness.binding import verify
 # longest scenario in the corpus runs about 14 s of stimulus and settle; 120
 # leaves room for a slow candidate without letting a hung one stall a corpus.
 TRIAL_TIMEOUT_SECONDS = 120
-# Settle after the last stimulus, in seconds, when a scenario names none. The
-# report records the effective value beside the wall clock.
+# Settle after the last stimulus, in seconds, when a scenario names none.
+# Settle length decides whether a late sink delivery is observed at all: a
+# value under the real delivery delay turns a slow candidate into a failed
+# assertion. Provisional default 5: all 26 features name their own window,
+# spanning 3 to 10 s with 5 the median, and the longest delivery delay any of
+# them injects is the 0.1 s `sink_delay` in backpressure-sheds-and-counts, so
+# the median carries about fifty times that. No corpus case exercises this
+# fallback, so it rests on the named windows rather than on a measurement of
+# its own; a scenario needing longer says so. The report records the effective
+# value beside the wall clock.
 SETTLE_SECONDS = 5
 
 # op -> (allowed keys, required keys), both excluding "op". Every stimulus
@@ -170,18 +178,19 @@ class RiemannSession(Session):
             self.events.append(observer.rule_response_event(time.time(), "delete", step["id"], status, None))
         elif op == "query_index":
             status, headers, body = self.adapter.query_index(step["q"])
-            # GET /index answers {"as_of":..., "entries":[...]}; GET /events
-            # answers {"events":[...]}. Both shapes are read so a query records
-            # the count it actually got rather than zero by accident.
-            if isinstance(body, list):
-                results = body
-            else:
-                body = _json_object(body)
-                results = body.get("entries", body.get("events", []))
+            # SPEC.md's read surface fixes GET /index?q= as
+            # {"as_of":{...},"entries":[...]}. That is the only shape read: a
+            # candidate answering a different field name is violating the spec,
+            # and reading its name here would let it pass the index scenarios.
+            entries = _json_object(body).get("entries")
+            if not isinstance(entries, list):
+                raise ValueError(
+                    'GET /index did not answer {"as_of":...,"entries":[...]}; got '
+                    + json.dumps(body, default=str)[:400])
             lowered = {k.lower(): v for k, v in headers.items()}
             self.events.append(observer.query_response_event(
                 time.time(), "index", q=step["q"], status=status,
-                match_count=len(results) if isinstance(results, list) else None,
+                match_count=len(entries),
                 # Mechanical: the header is present or it is not.
                 allow_origin=lowered.get("access-control-allow-origin")))
         elif op == "sink_delay":

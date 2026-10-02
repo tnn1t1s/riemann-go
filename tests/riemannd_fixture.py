@@ -9,6 +9,7 @@ combinator and is not evidence about any generated riemannd. Modes:
   silent   accept everything and reach no sink
   exit     exit nonzero at startup, before binding a port
   noprov   as good, with no provenance line in the ntfy message
+  renamed  as good, but GET /index answers its result list under "events"
 """
 import argparse
 import json
@@ -97,8 +98,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, dict(RULES[rule_id], counters={"stream": COUNTERS.get(rule_id, 0)}))
         if url.path == "/index":
             q = parse_qs(url.query).get("q", [""])[0]
+            key = "events" if a.mode == "renamed" else "entries"
             return self.reply(200, {"as_of": {"min": time.time(), "max": time.time()},
-                                    "entries": [{"host": "fixture", "service": "fixture"}] if q else []})
+                                    key: [{"host": "fixture", "service": "fixture"}] if q else []})
         self.reply(404, {"error": "no such path"})
 
     def do_PUT(self):

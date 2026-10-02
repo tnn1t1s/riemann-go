@@ -47,6 +47,21 @@ def test_verdicts_follow_the_sink(tmp_path, mode, category):
     assert summary["green"] == (1 if category == "GREEN" else 0)
 
 
+@pytest.mark.parametrize("mode,category", [("good", "GREEN"), ("renamed", "driver_error")])
+def test_index_reads_only_the_specified_shape(tmp_path, mode, category):
+    """A candidate that renames `entries` fails, rather than having its field name read."""
+    result, reports = invoke(tmp_path, mode, feature=ROOT / "tests/fixtures/index-shape.feature")
+    assert (result.returncode == 0) == (category == "GREEN"), result.stdout + result.stderr
+    assert [r["category"] for r in reports] == [category]
+    if category != "GREEN":
+        # The shape that arrived is in the trace, not in report["error"]: the
+        # missing final assertion overwrites that field afterwards.
+        rows = [json.loads(line) for line
+                in (tmp_path / "reports").glob("*/trace.jsonl").__next__().read_text().splitlines()]
+        errors = [r["error"] for r in rows if r.get("event") == "run_error"]
+        assert any('"entries"' in e and '"events"' in e for e in errors), errors
+
+
 @pytest.mark.parametrize("mutation", ["undefined", "empty", "missing_then", "late_undefined"])
 def test_invalid_features_fail_closed(tmp_path, mutation):
     text = (ROOT / "tests/features/fixture.feature").read_text()
