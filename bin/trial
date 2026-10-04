@@ -1,61 +1,56 @@
-#!/usr/bin/env bash
-# Run a binary against the development corpus, and optionally the held-out set.
-#
-# Usage:
-#   bin/trial <binary>              development corpus only
-#   bin/trial <binary> --holdout    both, as a promotion run
-#
-# The held-out set is deliberately not the default. It runs at promotion, and
-# its failures must not feed a spec edit; see scenarios/holdout/README.md.
+#!/usr/bin/env python3
+"""Run the Gherkin corpus against a riemannd candidate through pytest-bdd.
 
-set -euo pipefail
+The development corpus is features/*.feature. The held-out set under
+features/holdout/ runs only with --holdout, as a promotion run; its failures
+must not feed a spec edit (features/holdout/README.md).
+"""
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR")"
-PYTHON="${PYTHON:-$REPO_DIR/.venv/bin/python}"
+from riemann_harness.features import ENV
 
-if [ $# -lt 1 ]; then
-  echo "bin/trial: a binary path is required" >&2
-  exit 2
-fi
-BINARY="$1"; shift
-HOLDOUT=0
-[ "${1:-}" = "--holdout" ] && HOLDOUT=1
-
-if [ ! -x "$BINARY" ]; then
-  echo "bin/trial: not executable: $BINARY" >&2
-  exit 2
-fi
-if [ ! -x "$PYTHON" ]; then
-  echo "bin/trial: python not found at $PYTHON; create .venv first" >&2
-  exit 2
-fi
-
-run_set() {
-  local label="$1" pattern="$2" prefix="$3"
-  local total=0 green=0 start
-  start=$(date +%s)
-  echo "== $label"
-  for s in $pattern; do
-    local n cat
-    n="$(basename "$s" .yaml)"
-    "$PYTHON" -m harness.run --scenario "$s" --binary "$BINARY" \
-      --report-out "$REPO_DIR/reports/${prefix}${n}.json" \
-      --trace-out  "$REPO_DIR/traces/${prefix}${n}.jsonl" \
-      --log-out    "$REPO_DIR/reports/${prefix}${n}.log" >/dev/null 2>&1 || true
-    cat="$("$PYTHON" -c "
-import json,sys
-try: print(json.load(open('$REPO_DIR/reports/${prefix}${n}.json'))['score']['category'])
-except Exception: print('REPORT_UNREADABLE')" )"
-    printf '  %-46s %s\n' "$n" "$cat"
-    total=$((total+1))
-    [ "$cat" = "GREEN" ] && green=$((green+1))
-  done
-  echo "  -- $green/$total green in $(( $(date +%s) - start ))s"
-}
-
-run_set "development corpus" "$REPO_DIR/scenarios/*.yaml" ""
-if [ "$HOLDOUT" -eq 1 ]; then
-  echo
-  run_set "held-out set (promotion only)" "$REPO_DIR/scenarios/holdout/*.yaml" "holdout-"
-fi
+root = Path(__file__).resolve().parents[1]
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument('--command', required=True, help='Candidate as a JSON argv array; command[0] is the absolute riemannd path')
+p.add_argument('--features', default=str(root / 'features'), help='Feature file or directory')
+p.add_argument('--out', default='reports/trial')
+p.add_argument('--spec', default=str(root / 'SPEC.md'), help='The SPEC.md the candidate was generated from')
+p.add_argument('--build-manifest', help='build-manifest.json binding the artifact to that SPEC.md')
+p.add_argument('--unbound', action='store_true', help='Waive the binding check; the report records the waiver')
+p.add_argument('--holdout', action='store_true', help='Also run features/holdout/ (promotion run)')
+p.add_argument('--ready-timeout', type=float, default=15.0,
+               help='Seconds to wait for GET /healthz after launch; a compiled riemannd answers within one')
+p.add_argument('-k', default='', help='pytest scenario selection expression')
+p.add_argument('-m', default='', help='pytest tag selection expression')
+a = p.parse_args()
+try:
+    command = json.loads(a.command)
+    if not isinstance(command, list) or not command or not all(isinstance(v, str) and v for v in command):
+        raise ValueError('command must be a nonempty JSON string array')
+except ValueError as exc:
+    p.error(str(exc))
+if not a.build_manifest and not a.unbound:
+    p.error('pass --build-manifest, or --unbound to waive the binding check')
+out = Path(a.out).resolve()
+out.mkdir(parents=True, exist_ok=True)
+env = dict(os.environ, **{ENV: str(Path(a.features).resolve())})
+env['RIEMANN_GO_HOLDOUT'] = '1' if a.holdout else '0'
+args = [sys.executable, '-m', 'pytest', 'features/test_features.py', '-p', 'no:cacheprovider',
+        '--harness-command', json.dumps(command), '--harness-out', str(out),
+        '--harness-spec', str(Path(a.spec).resolve()),
+        '--harness-ready-timeout', str(a.ready_timeout),
+        '--junitxml', str(out / 'junit.xml'), '-v']
+if a.build_manifest:
+    args += ['--harness-build-manifest', str(Path(a.build_manifest).resolve())]
+if a.unbound:
+    args += ['--riemann-unbound']
+if a.k:
+    args += ['-k', a.k]
+if a.m:
+    args += ['-m', a.m]
+raise SystemExit(subprocess.call(args, cwd=root, env=env))

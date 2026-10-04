@@ -1,10 +1,10 @@
-You are implementing a Go binary specified by these documents. Read them in this order:
+You are implementing a Go binary specified by the documents in the current working directory. Read them in this order:
 
-1. `__SPEC_PATH__/SPEC.md` — what riemannd must do (behavioral contract), including the event schema, the normative CLI and HTTP surface, the rule document, the alert shape and the observability contract.
-2. `__SPEC_PATH__/SEMANTICS.md` — how each combinator behaves, and how indexing and expiry behave, stated once with parameters, state, timers, edge cases and worked examples. This replaces reading the upstream Clojure. It was extracted from that Clojure, reviewed, and frozen, so that every generation works from the same words instead of re-interpreting four thousand lines differently each time.
-3. `__SPEC_PATH__/SCALE.md` — the bounded-queue, partitioning and cardinality requirements.
-4. `__SPEC_PATH__/INVARIANTS.md` — properties that hold across every generation regardless of which features the spec adds. Binding.
-5. `__SPEC_PATH__/knowledge/INDEX.md` — pointers to material that exists on disk, with one line of orientation each and no summaries.
+1. `SPEC.md` — what riemannd must do (behavioral contract), including the event schema, the normative CLI and HTTP surface, the rule document, the alert shape and the observability contract.
+2. `SEMANTICS.md` — how each combinator behaves, and how indexing and expiry behave, stated once with parameters, state, timers, edge cases and worked examples. This replaces reading the upstream Clojure. It was extracted from that Clojure, reviewed, and frozen, so that every generation works from the same words instead of re-interpreting four thousand lines differently each time.
+3. `SCALE.md` — the bounded-queue, partitioning and cardinality requirements.
+4. `INVARIANTS.md` — properties that hold across every generation regardless of which features the spec adds. Binding.
+5. `knowledge/INDEX.md` — pointers to material that exists on disk, with one line of orientation each and no summaries.
 
 You are graded by a validation harness. You do not read it, you do not read the scenarios it runs, and you are not told which behaviors it checks. Everything you are accountable for is in the documents above; the harness asserts against those and nothing else. Write to the specification, not to a test.
 
@@ -68,7 +68,7 @@ the most valuable thing you produce after the code itself.
 
 You are a consumer of your dependencies. Use `expr-lang/expr` through its documented surface; do not read its internals to find a faster path.
 
-Do not read the validation harness, and do not read the scenarios. The harness conforms to the surface the spec fixes; the surface never conforms to the harness. There is nothing in it you are allowed to learn, and reading it would let you fit the test rather than the spec.
+Do not read the validation harness, and do not read the scenarios. The harness conforms to the surface the spec fixes; the surface never conforms to the harness. There is nothing in it you are allowed to learn, and reading it would let you fit the test rather than the spec. Do not read outside the current working directory except the paths `knowledge/INDEX.md` names. Do not contact any live service.
 
 Stopping early beats guessing. If the spec or the upstream material leaves you genuinely unsure about a behavior, implement the rest, leave a `// SPEC-GAP:` note saying exactly what was unclear, and stop. A short summary of what the spec failed to answer is worth more than a plausible invention, because the invention will be re-rolled differently at the next generation and something will quietly depend on it in between.
 
@@ -78,11 +78,14 @@ Stopping early beats guessing. If the spec or the upstream material leaves you g
 - **No deployment configuration.** No Dockerfile, no systemd unit, no Ansible, no CI workflow.
 - **No features the spec does not require.** No metrics exporter the spec did not ask for, no extra endpoint, no debug mode.
 
-## Produce in the current working directory
+## Produce under `output/`
 
-- `go.mod`, `go.sum`
-- `cmd/riemannd/main.go`
-- the packages you chose, laid out as you see fit
-- `README.md` — one short paragraph: the packages you created, how to start the binary, and which decisions you marked `SPEC-GAP`
+Leave every input file exactly as you found it; the runner checks their bytes after you finish. Write everything under `output/`:
 
-Stop when `go build ./...` is clean from the working directory. That is the finish line; a clean build with honest gaps is a complete generation.
+- `output/src/` — the Go module: `go.mod`, `go.sum`, `cmd/riemannd/main.go`, the packages you chose, laid out as you see fit, and a `README.md` of one short paragraph: the packages you created, how to start the binary, and which decisions you marked `SPEC-GAP`.
+- `output/service` — the binary built for the machine you are running on, with `CGO_ENABLED=0`. This is the artifact the harness launches.
+- `output/riemannd-linux-arm64`, `output/riemannd-linux-amd64`, `output/riemannd-darwin-arm64` — the same source cross-compiled with `CGO_ENABLED=0` and `GOOS`/`GOARCH` set, which are the release assets.
+- `output/BUILD.md` — the exact commands that produced the four binaries, and the `go version` that ran them, so the build can be repeated.
+- `output/build-manifest.json` — a JSON object with exactly these keys: `contract` set to `"riemann-go/spec-v1"`, `spec_sha256` set to the SHA-256 hex digest of the `SPEC.md` bytes in this directory, `artifact_sha256` set to the digest of `output/service`, and `artifacts`, an object mapping each of the three cross-compiled file names to its digest. Compute the digests from the files on disk after the build; do not type them.
+
+Finish line: the four binaries exist, `output/build-manifest.json` is written, and `go build ./...` from `output/src` is clean. Exit nonzero if the build fails. A clean build with honest gaps is a complete generation.

@@ -1,0 +1,3 @@
+model=@RG_MODEL@
+command_file=@RG_AGENT_COMMAND_FILE@
+generation_id=@RG_GENERATION_ID@

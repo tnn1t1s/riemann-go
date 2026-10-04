@@ -315,7 +315,7 @@ The core carries no dependency on any monitoring system to do this. It exposes a
 
 ## Acceptance
 
-A generation is accepted when it passes the scenario corpus under `scenarios/`. Each scenario names a timeline of stimuli and a set of expectations over the trace. The harness drives riemann-go over the HTTP surface above, stands up the sink receiver, and evaluates the expectations. See `HARNESS.md` for the matcher and `scenarios/README.md` for the grammar.
+A generation is accepted when it passes the Gherkin corpus under `features/`. Each scenario names a timeline of stimuli and a set of assertions over the trace. The harness drives riemann-go over the HTTP surface above, stands up the sink receiver, and evaluates the assertions. See `HARNESS.md` for the matcher and the step table.
 
 riemann-go's own responses are graded only where a property cannot be seen from a sink, and `INVARIANTS.md` I1 bounds how far that can go.
 

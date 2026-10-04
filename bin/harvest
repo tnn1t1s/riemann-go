@@ -3,7 +3,8 @@
 # silences recur across independent generations.
 #
 # Usage:
-#   bin/harvest [dir ...]        default: every generation under scratch/ and
+#   bin/harvest [dir ...]        default: every generation attempt under
+#                                build*/generations/, scratch/, and
 #                                releases/candidates/
 #   bin/harvest --raw [dir ...]  print the extracted notes, no clustering
 #   bin/harvest --help
@@ -37,7 +38,10 @@ esac
 DIRS=("$@")
 if [ "${#DIRS[@]}" -eq 0 ]; then
   while IFS= read -r d; do DIRS+=("$d"); done < <(
-    find "$REPO_DIR/scratch" "$REPO_DIR/releases/candidates" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort
+    {
+      find "$REPO_DIR"/build* "$REPO_DIR/scratch" -path '*/generations/gen-*' -maxdepth 4 -type d 2>/dev/null
+      find "$REPO_DIR/releases/candidates" -mindepth 1 -maxdepth 1 -type d 2>/dev/null
+    } | sort
   )
 fi
 if [ "${#DIRS[@]}" -eq 0 ]; then

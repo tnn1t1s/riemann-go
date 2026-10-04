@@ -7,19 +7,19 @@ A generation of `riemannd` was validated against a scenario and one or more asse
 Read these in order:
 
 1. `__SPEC_PATH__` — the behavioral contract riemannd is generated from.
-2. `__SCENARIO_PATH__` — the scenario whose assertions failed: the events it fed in, the rules it installed, and the expectations it asserted.
+2. `__FEATURE_PATH__`, scenario `__SCENARIO_NAME__` — the Gherkin scenario whose assertions failed: the rules it installed, the events it fed in, and the trace assertions it made.
 3. `__TRACE_PATH__` — the normalized trace. This is what the harness's sink receiver and read probes actually observed: which alerts arrived, with what provenance, in what order, and what the index and the counters said. **This is your ground truth.**
-4. `__REPORT_PATH__` — the harness run report, including per-assertion matcher verdicts and the `score` block.
+4. `__REPORT_PATH__` — the trial report, including per-assertion matcher verdicts, the `category` and the `score` block.
 5. `__LOG_PATH__` — the tail of the riemannd process log for the run.
 
 You may also read `__HARNESS_PATH__` for the matcher operators and the trace event vocabulary.
 
 ## Guard: GREEN runs
 
-Check `score.category` in the report first. If it is `"GREEN"`, the orchestrator invoked you by mistake. Output exactly one line and stop:
+Check `category` in the report first. If it is `"GREEN"`, the orchestrator invoked you by mistake. Output exactly one line and stop:
 
 ```
-No diagnosis required: score.category is GREEN. Orchestrator should promote, not diagnose.
+No diagnosis required: category is GREEN. Orchestrator should promote, not diagnose.
 ```
 
 ## What you must not do
@@ -55,7 +55,7 @@ Choose exactly one label and justify it from the trace.
 - **HARNESS / OBSERVER BUG** — the trace does not faithfully reflect what the sink receiver and read probes saw. The rarest category; require strong evidence.
 - **SCENARIO BUG** — the scenario asserts something the spec does not require, or its stimulus does not set up the precondition its expectations assume.
 
-When `score.category` is `compile_error`, `start_error` or `observer_error`, the category alone nearly determines the label. Say so and move on rather than reconstructing it.
+When `category` is `start_error`, `process_error` or `observer_error`, the category alone nearly determines the label. Say so and move on rather than reconstructing it.
 
 Two riemann-go-specific traps to check before you settle on a label:
 
@@ -67,7 +67,7 @@ Two riemann-go-specific traps to check before you settle on a label:
 Choose exactly one.
 
 - **EDIT SPEC.md** — name the section, quote the current text if there is any, and write one paragraph of proposed replacement specific enough that the orchestrator can paste it in without further inference.
-- **ADD SCENARIO** — name the file, such as `scenarios/<name>.yaml`, and describe the stimulus and the expectations that would isolate the property whose violation produced this failure. Choose this when the failure could have been caught earlier by a narrower scenario.
+- **ADD SCENARIO** — name the file, such as `features/<name>.feature`, and describe the stimulus and the trace assertions that would isolate the property whose violation produced this failure. Choose this when the failure could have been caught earlier by a narrower scenario.
 - **REGENERATE** — choose this only when the spec is clear and the failure looks like a one-off inconsistency rather than a structural gap. Write one or two sentences saying what a second roll would have to get right. There is no feedback channel into the generator, so this move is a bet that the same spec produces a better artifact; if the same failure recurs, the gap is spec ambiguity in disguise and the move becomes EDIT SPEC.md.
 - **HARNESS BUG** — name what in the oracle misbehaved and what evidence shows it. The generation is unjudged until the harness is fixed and the scenario re-run.
 

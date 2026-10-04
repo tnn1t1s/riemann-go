@@ -2,7 +2,7 @@
 
 > Principles that hold across every riemann-go generation, regardless of which features the spec adds.
 
-This document is a **generator-binding contract**. Every generation reads it alongside `SPEC.md`, `SCALE.md` and `HARNESS.md`. A generation that violates an invariant is not a v0 or a v1 implementation; it is the wrong shape, and the audit checklist at the end is what catches it before promotion.
+This document is a **generator-binding contract**. Every generation reads it alongside `SPEC.md`, `SEMANTICS.md` and `SCALE.md`. A generation that violates an invariant is not a v0 or a v1 implementation; it is the wrong shape, and the audit checklist at the end is what catches it before promotion.
 
 The test for whether something belongs here: would the principle still hold if riemann-go grew a feature class nobody has imagined, say federated multi-node aggregation? If yes, it is an invariant. If it depends on a specific combinator, a specific sink, or a specific number, it belongs in `SPEC.md`, `SCALE.md`, or a scenario.
 
@@ -78,7 +78,7 @@ The packages that hold the event model, the expression compiler, the combinators
 
 An emitter's HTTP request is answered within the admission deadline, always. Past the deadline the answer is `429`, never a stall, and never a `202` bought by waiting longer. The emitter's contract is fire-and-forget: it counts what it lost and moves on.
 
-**Why.** The atlas vocabulary's third rule is that emission never affects the agent (`~/Developer/riemann-atlas/VOCABULARY.md`). An agent that blocks on its monitor has had its behavior changed by being observed, which is worse than losing the observation. That is what fixes the meaning of backpressure here: the server sheds by declared policy and reports what it shed, rather than pushing the cost back onto the caller.
+**Why.** The riemann-agent-obs vocabulary's third rule is that emission never affects the agent (`~/Developer/riemann-agent-obs/VOCABULARY.md`). An agent that blocks on its monitor has had its behavior changed by being observed, which is worse than losing the observation. That is what fixes the meaning of backpressure here: the server sheds by declared policy and reports what it shed, rather than pushing the cost back onto the caller.
 
 **Acid test.** Under a scenario that saturates the loop, no `POST /events` takes materially longer than the deadline, and every reply is either `202` or `429`. A reply that arrives late with `202` is a violation even though the events were admitted.
 
@@ -120,11 +120,11 @@ The implementation under `releases/candidates/<gen-id>/src/` is a build output. 
 
 The generator reads `SPEC.md`, `SEMANTICS.md`, `SCALE.md`, `INVARIANTS.md` and `knowledge/INDEX.md`. It does not read `HARNESS.md`, the scenarios, the matcher or any report. A held-out scenario is additionally withheld from the spec-editing loop: its assertions, its failures and its traces play no part in deciding what a specification document says.
 
-**Why.** In this repository the artifact that overfits is the specification. Every failure in `scenarios/` drives a spec edit, so the development corpus is both the loss function and the score. Green across it establishes that the spec was edited until those cases passed, and nothing about a case nobody wrote. The held-out set is the only measurement of whether the spec generalises, and showing the generator which behaviors are checked destroys the same property from the other end.
+**Why.** In this repository the artifact that overfits is the specification. Every failure in `features/` drives a spec edit, so the development corpus is both the loss function and the score. Green across it establishes that the spec was edited until those cases passed, and nothing about a case nobody wrote. The held-out set is the only measurement of whether the spec generalises, and showing the generator which behaviors are checked destroys the same property from the other end.
 
-Looking at a held-out scenario consumes it. Once its failure has informed a spec edit it moves permanently into `scenarios/` and a replacement is written, because it is now part of what the spec was fitted to.
+Looking at a held-out scenario consumes it. Once its failure has informed a spec edit it moves permanently into `features/` and a replacement is written, because it is now part of what the spec was fitted to.
 
-**Acid test.** Grep the generator's reading order in `bin/prompt.md` and the required list in `bin/generate` for `HARNESS`, `scenarios` or `holdout`. Any hit is a violation. Then check that `bin/iterate` discovers scenarios at depth 1, so neither `scenarios/fixtures/` nor `scenarios/holdout/` enters a development iteration. Then check that every file in `scenarios/holdout/` is absent from `HARNESS.md`.
+**Acid test.** Grep the generator's reading order in `bin/prompt.md` and the input list in `harness/inputs.py`, which is where `INPUTS` lives and which `bin/generate` imports, for `HARNESS`, `features` or `holdout`. Any hit is a violation. Then check that `bin/trial` collects `features/holdout/` only under `--holdout`, so the held-out set never enters a development iteration. Then check that every file in `features/holdout/` is absent from `HARNESS.md`.
 
 ## Audit checklist for a candidate generation
 
@@ -141,5 +141,5 @@ Before promoting `releases/candidates/<gen-id>/` to `releases/validated/`:
 - [ ] I9: Under the flood scenario every reply is `202` or `429` and none exceeds the deadline materially.
 - [ ] I10: All seventeen `SPEC.md` properties map to at least one scenario.
 - [ ] I11: The dry-run scenario's two runs are identical and the trace holds no sink event from either.
-- [ ] I12: `git log -- releases/<tag>/src/` shows no substantive edits since the generation commit.
-- [ ] I13: The generator's reading order names no harness file, no scenario and no held-out scenario; `bin/iterate` globs at depth 1; the held-out set ran at promotion and its reports are kept beside the development ones.
+- [ ] I12: `git log -- releases/<trust>/<tag>/src/` shows no substantive edits since the generation commit.
+- [ ] I13: The generator's reading order names no harness file, no scenario and no held-out scenario; the held-out set is collected only under `--holdout`; it ran at promotion and its reports are kept beside the development ones.
